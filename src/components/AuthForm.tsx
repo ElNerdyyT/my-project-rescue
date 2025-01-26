@@ -1,11 +1,13 @@
 import { useState } from 'preact/hooks';
 import { supabase } from '../utils/supabaseClient';
+import '../css/AuthForm.css';
 
 const AuthForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLogin, setIsLogin] = useState(true);
 
   const handleLogin = async (e: Event) => {
     e.preventDefault();
@@ -46,43 +48,59 @@ const AuthForm = () => {
   };
 
   return (
-    <div class="auth-form">
-      <h2>{loading ? 'Cargando...' : 'Iniciar sesión o Registrarse'}</h2>
-      <form onSubmit={handleLogin}>
-        <div>
-          <label for="email">Correo electrónico</label>
-          <input
-            type="email"
-            id="email"
-            value={email}
-            onInput={(e) => setEmail(e.currentTarget.value)}
-            placeholder="Correo electrónico"
-            required
-          />
+    <div class="auth-container">
+      <div class="auth-form">
+        <div class="auth-form-header">
+          <h2>{isLogin ? 'Iniciar sesión' : 'Registrarse'}</h2>
+          <p>{isLogin ? 'Ingresa tus credenciales' : 'Crea una nueva cuenta'}</p>
         </div>
-        <div>
-          <label for="password">Contraseña</label>
-          <input
-            type="password"
-            id="password"
-            value={password}
-            onInput={(e) => setPassword(e.currentTarget.value)}
-            placeholder="Contraseña"
-            required
-          />
-        </div>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        <div>
-          <button type="submit" disabled={loading}>
-            {loading ? 'Cargando...' : 'Iniciar sesión'}
+        
+        <form onSubmit={isLogin ? handleLogin : handleRegister}>
+          <div class="form-group">
+            <label for="email">Correo electrónico</label>
+            <div class="input-wrapper">
+              <span class="material-icons form-icon">email</span>
+              <input
+                type="email"
+                id="email"
+                value={email}
+                onInput={(e) => setEmail(e.currentTarget.value)}
+                placeholder="Correo electrónico"
+                required
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Contraseña</label>
+            <div class="input-wrapper">
+              <span class="material-icons form-icon">lock</span>
+              <input
+                type="password"
+                id="password"
+                value={password}
+                onInput={(e) => setPassword(e.currentTarget.value)}
+                placeholder="Contraseña"
+                required
+              />
+            </div>
+          </div>
+
+          {error && <p class="error-message">{error}</p>}
+
+          <button type="submit" class="btn-primary" disabled={loading}>
+            {loading ? 'Cargando...' : (isLogin ? 'Iniciar sesión' : 'Registrarse')}
           </button>
+        </form>
+
+        <div class="auth-form-footer">
+          <p>
+            {isLogin ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}
+            <a href="#" onClick={() => setIsLogin(!isLogin)}>
+              {isLogin ? ' Regístrate aquí' : ' Inicia sesión aquí'}
+            </a>
+          </p>
         </div>
-      </form>
-      <div>
-        <p>¿No tienes cuenta?</p>
-        <button onClick={handleRegister} disabled={loading}>
-          {loading ? 'Cargando...' : 'Registrarse'}
-        </button>
       </div>
     </div>
   );
