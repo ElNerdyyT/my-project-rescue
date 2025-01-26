@@ -1,7 +1,6 @@
 import { FunctionalComponent } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import Layout from './Layout';
-import DateRangeSelector from './components/DateRangeSelector';
 import Menu from './components/Menu';
 import AuthForm from './components/AuthForm';
 import { supabase } from './utils/supabaseClient';
