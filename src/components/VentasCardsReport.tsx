@@ -9,10 +9,6 @@ interface DashboardData {
   utilidad_total: string;
 }
 
-interface GetDashboardDataParams {
-  start_date: string;
-  end_date: string;
-}
 
 interface DashboardState {
   Costo: number;
