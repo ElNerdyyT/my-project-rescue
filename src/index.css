@@ -1,0 +1,82 @@
+/* Estilos globales */
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: rgba(255, 255, 255, 0.87);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  place-items: flex-start;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #fff;  /* Fondo blanco en modo claro */
+  color: #242424;  /* Color de texto oscuro en modo claro */
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+
+button:hover {
+  border-color: #646cff;
+}
+
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+.table-wrapper {
+  overflow-x: auto; /* Habilita el desplazamiento horizontal */
+  -webkit-overflow-scrolling: touch; /* Mejora el desplazamiento en dispositivos táctiles */
+}
+
+.table {
+  min-width: 100%; /* Asegura que la tabla ocupe todo el ancho disponible */
+}
+
+.sticky-top {
+  position: sticky;
+  top: 0; /* Fija el encabezado al tope cuando se haga scroll */
+  z-index: 100; /* Asegura que el encabezado se quede encima de las filas */
+  background-color: #f8f9fa; /* Fondo blanco para el encabezado */
+}
+
+
+/* Asegura que el contenido de la tabla se ajusta al ancho en pantallas pequeñas */
+@media screen and (max-width: 768px) {
+  .table-wrapper {
+    padding: 0 10px;  /* Espaciado adicional */
+  }
+  
+  .table th, .table td {
+    padding: 8px;  /* Ajuste de espaciado en celdas */
+  }
+  
+  h1 {
+    font-size: 2.5em;  /* Ajuste de tamaño de fuente en pantallas pequeñas */
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "my-project-rescue",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.48.0",
+    "apexcharts": "^4.4.0",
+    "bootstrap": "^5.3.3",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.2",
+    "preact": "^10.25.3",
+    "preact-router": "^4.1.2"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.9.3",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.5"
+  }
+}

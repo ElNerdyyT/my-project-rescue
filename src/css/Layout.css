@@ -1,0 +1,56 @@
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.layout-container {
+  display: flex;
+  width: 100vw;
+  max-width: 100%;
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+  margin-left: 0;
+  transition: margin-left 0.3s;
+}
+
+.content-wrapper {
+  flex: 1;
+  width: 100%;
+  padding: 1.5rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .content-wrapper {
+    padding: 1.25rem;
+  }
+}
+
+@media (max-width: 992px) {
+  .content-wrapper {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .content-wrapper {
+    padding: 0.75rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .content-wrapper {
+    padding: 0.5rem;
+  }
+}

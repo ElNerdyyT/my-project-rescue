@@ -1,0 +1,91 @@
+/* Responsive Utilities - Optimized for Wide Screens */
+.responsive-container {
+  width: 100%;
+  max-width: 1600px; /* Aumentamos el máximo para pantallas grandes */
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.responsive-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); /* Mejor distribución en grandes pantallas */
+}
+
+.responsive-flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.responsive-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Breakpoints ajustados para transiciones más suaves */
+@media (max-width: 1440px) {
+  .responsive-container {
+    padding: 1.25rem;
+  }
+  
+  .responsive-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 1200px) {
+  .responsive-container {
+    padding: 1rem;
+  }
+  
+  .responsive-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1.2rem;
+  }
+  
+  .responsive-flex {
+    gap: 1.2rem;
+  }
+}
+
+@media (max-width: 992px) {
+  .responsive-container {
+    padding: 0.75rem;
+  }
+  
+  .responsive-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+}
+
+/* Versión móvil (se mantiene igual pero con ajustes de padding) */
+@media (max-width: 768px) {
+  .responsive-container {
+    padding: 0.5rem;
+  }
+  
+  .responsive-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .responsive-flex {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .responsive-card {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .responsive-container {
+    padding: 0.25rem;
+  }
+}
