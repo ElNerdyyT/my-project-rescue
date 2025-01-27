@@ -2,29 +2,31 @@ import { useState, useEffect } from 'preact/hooks';
 import { supabase } from '../utils/supabaseClient';
 
 // Definir una interfaz para los datos que esperamos
-interface DashboardData {
-  costo_total: string;
-  descuento_total: string;
-  precio_total: string;
-  utilidad_total: string;
+interface VentaData {
+  articulo: string;
+  cantidad: number;
+  costo: number;
+  dscto: number;
+  ppub: number;
 }
 
-
 interface DashboardState {
-  Costo: number;
-  Precio: number;
-  Descuento: number;
-  Utilidad: number;
+  ProductosVendidos: number;
+  CostoTotal: number;
+  PrecioPublico: number;
+  DescuentoFinal: number;
+  PrecioFinal: number;
   isLoading: boolean;
   error: string | null;
 }
 
 const Dashboard = () => {
 const [data, setData] = useState<DashboardState>({
-    Costo: 0,
-    Precio: 0,
-    Descuento: 0,
-    Utilidad: 0,
+    ProductosVendidos: 0,
+    CostoTotal: 0,
+    PrecioPublico: 0,
+    DescuentoFinal: 0,
+    PrecioFinal: 0,
     isLoading: false,
     error: null
   });
@@ -79,25 +81,32 @@ const [data, setData] = useState<DashboardState>({
         const formattedEndDate = new Date(endDate).toISOString();
 
         const { data: result, error } = await supabase
-          .rpc('get_dashboard_data', {
-            start_date: formattedStartDate,
-            end_date: formattedEndDate
-          })
-          .returns<DashboardData[]>();
+          .from('KardexMexico')
+          .select('cantidad, costo, ppub')
+          .eq('movto', '1')  // Filtrar solo ventas de caja
+          .gte('fecha', formattedStartDate)
+          .lte('fecha', formattedEndDate)
+          .returns<VentaData[]>();
 
         if (error) throw error;
 
-        if (!result || result.length === 0) {
+        if (!result) {
           throw new Error('No se encontraron datos para el rango de fechas especificado');
         }
 
-        const { costo_total, descuento_total, precio_total, utilidad_total } = result[0];
+        // Calcular los totales
+        const productosVendidos = result.reduce((sum, item) => sum + item.cantidad, 0);
+        const costoTotal = result.reduce((sum, item) => sum + (item.cantidad * item.costo), 0);
+        const precioPublico = result.reduce((sum, item) => sum + (item.cantidad * item.ppub), 0);
+        const descuentoFinnal = result.reduce((sum, item) => sum + (item.cantidad * item.dscto), 0);
+        const precioFinal = precioPublico - descuentoFinnal;
 
         setData({
-          Costo: parseFloat(costo_total),
-          Precio: parseFloat(precio_total),
-          Descuento: parseFloat(descuento_total),
-          Utilidad: parseFloat(utilidad_total),
+          ProductosVendidos: productosVendidos,
+          CostoTotal: costoTotal,
+          PrecioPublico: precioPublico,
+          DescuentoFinal: descuentoFinnal,
+          PrecioFinal: precioFinal,
           isLoading: false,
           error: null
         });
@@ -134,38 +143,47 @@ const [data, setData] = useState<DashboardState>({
           <div className="col-sm-6 col-lg-3">
             <div className="card">
               <div className="card-body">
-                <div className="subheader">Costo Total</div>
-                <div className="h1 mb-3">${data.Costo.toFixed(2)}</div>
+                <div className="subheader">Productos Vendidos</div>
+                <div className="h1 mb-3">{data.ProductosVendidos}</div>
               </div>
             </div>
           </div>
 
-        <div className="col-sm-6 col-lg-3">
-          <div className="card">
-            <div className="card-body">
-              <div className="subheader">Precio Total</div>
-              <div className="h1 mb-3">${data.Precio.toFixed(2)}</div>
+          <div className="col-sm-6 col-lg-3">
+            <div className="card">
+              <div className="card-body">
+                <div className="subheader">Costo Total</div>
+                <div className="h1 mb-3">${data.CostoTotal.toFixed(2)}</div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="col-sm-6 col-lg-3">
-          <div className="card">
-            <div className="card-body">
-              <div className="subheader">Descuento Total</div>
-              <div className="h1 mb-3">${data.Descuento.toFixed(2)}</div>
+          <div className="col-sm-6 col-lg-3">
+            <div className="card">
+              <div className="card-body">
+                <div className="subheader">Precio Público</div>
+                <div className="h1 mb-3">${data.PrecioPublico.toFixed(2)}</div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="col-sm-6 col-lg-3">
-          <div className="card">
-            <div className="card-body">
-              <div className="subheader">Utilidad Total</div>
-              <div className="h1 mb-3">${data.Utilidad.toFixed(2)}</div>
+          <div className="col-sm-6 col-lg-3">
+            <div className="card">
+              <div className="card-body">
+                <div className="subheader">Descuento Final</div>
+                <div className="h1 mb-3">${data.DescuentoFinal.toFixed(2)}</div>
+              </div>
             </div>
           </div>
-        </div>
+
+          <div className="col-sm-6 col-lg-3">
+            <div className="card">
+              <div className="card-body">
+                <div className="subheader">Precio Final</div>
+                <div className="h1 mb-3">${data.PrecioFinal.toFixed(2)}</div>
+              </div>
+            </div>
+          </div>
       </div>
       )}
     </div>
