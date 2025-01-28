@@ -73,6 +73,7 @@ const DataTable = () => {
         .lte('fecha', formattedEndDate)
         .order('fecha', { ascending: false })
         .order('hora', { ascending: false });
+        
   
       if (error) {
         console.error('Error fetching data:', error.message);
@@ -158,7 +159,7 @@ const DataTable = () => {
       <div class="col-12">
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title">Kardex México</h3>
+            <h3 class="card-title">Ventas Mexico</h3>
           </div>
           <VentrasCardsReport />
           <div class="card-body border-bottom py-3">
