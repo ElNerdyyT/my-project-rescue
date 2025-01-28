@@ -104,7 +104,7 @@ const Menu: FunctionalComponent = () => {
           <h4 className="section-title">Reportes</h4>
           <ul className="menu">
             <li className="menu-item">
-              <a href="/reportes/utilidad" className="menu-link">
+              <a href="/reportes" className="menu-link">
                 <span className="menu-icon">📊</span>
                 <span>Utilidad</span>
               </a>
