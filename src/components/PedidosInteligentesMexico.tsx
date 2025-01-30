@@ -40,6 +40,7 @@ const PedidosInteligentes = () => {
   const [sugerencias, setSugerencias] = useState<Sugerencia[]>([]);
   const [pedidosEditados, setPedidosEditados] = useState<{[key: string]: number}>({});
   const [loading, setLoading] = useState(true);
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>(['1','2','3','4','5','20','21','22']);
   
 
   const getTableNames = () => ({
@@ -61,7 +62,7 @@ const PedidosInteligentes = () => {
         const { data: articulosData, error: articulosError } = await supabase
           .from(articulosTable)
           .select('cve_articulo_a, depto_a, subdepto_a, nombre_comer_a, cant_piso_a, preciomn_a, costo_a')
-          .in('depto_a', ['1','2','3','4','5','20','21','22']);
+          .in('depto_a', selectedDepartments); // Cambiar el array fijo por el estado
 
         if (articulosError) throw articulosError;
 
@@ -91,7 +92,7 @@ const PedidosInteligentes = () => {
     };
 
     fetchData();
-  }, [selectedBranch]);
+  }, [selectedBranch, selectedDepartments]); // Añadir selectedDepartments a las dependencias
 
   useEffect(() => {
     if (!articulos.length || !movimientos.length) return;
@@ -190,6 +191,38 @@ const PedidosInteligentes = () => {
             >
               Exportar PDF
             </button>
+            <div className="dropdown">
+              <button 
+                className="btn btn-secondary dropdown-toggle" 
+                type="button" 
+                data-bs-toggle="dropdown"
+              >
+                Departamentos
+              </button>
+              <div className="dropdown-menu p-3">
+                {['1','2','3','4','5','20','21','22'].map(depto => (
+                  <div key={depto} className="form-check">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id={`depto-${depto}`}
+                      checked={selectedDepartments.includes(depto)}
+                      onChange={(e) => {
+                        const checked = e.currentTarget.checked;
+                        setSelectedDepartments(prev => 
+                          checked 
+                            ? [...prev, depto] 
+                            : prev.filter(d => d !== depto)
+                        );
+                      }}
+                    />
+                    <label className="form-check-label" htmlFor={`depto-${depto}`}>
+                      Depto {depto}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
             <select 
               className="form-select w-auto"
               value={selectedBranch}

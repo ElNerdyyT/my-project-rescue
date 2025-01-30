@@ -93,9 +93,9 @@ const Menu: FunctionalComponent = () => {
             </a>
           </li>
           <li className="menu-item">
-            <a href="/ventas" className="menu-link">
+            <a href="/articulos" className="menu-link">
               <span className="menu-icon">💵</span>
-              <span>Ventas</span>
+              <span>Articulos</span>
             </a>
           </li>
         </ul>
