@@ -13,6 +13,7 @@ import Kardex from '../pages/Kardex';
 import Articulos from '../pages/Articulos';
 import Reportes from '../pages/Reportes';
 import Ajustes from '../pages/Ajustes';
+import PedidosInteligentes from '../pages/PedidosInteligentes';
 
 const Menu: FunctionalComponent = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -146,9 +147,9 @@ const Menu: FunctionalComponent = () => {
               </a>
             </li>
             <li className="menu-item">
-              <a href="/reportes/pedido-inteligente" className="menu-link">
+              <a href="/reportes/pedidos-inteligentes" className="menu-link">
                 <span className="menu-icon">🛍️</span>
-                <span>Pedido Inteligente</span>
+                <span>Pedidos Inteligente</span>
               </a>
             </li>
           </ul>
@@ -194,6 +195,7 @@ const Menu: FunctionalComponent = () => {
           <Route path="/articulos" component={Articulos} />
           <Route path="/reportes" component={Reportes} />
           <Route path="/ajustes" component={Ajustes} />
+          <Route path="/reportes/pedidos-inteligentes" component={PedidosInteligentes} />
         </Router>
       </div>
     </div>
