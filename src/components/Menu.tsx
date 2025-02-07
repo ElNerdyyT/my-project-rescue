@@ -14,6 +14,7 @@ import Articulos from '../pages/Articulos';
 import Reportes from '../pages/Reportes';
 import Ajustes from '../pages/Ajustes';
 import PedidosInteligentes from '../pages/PedidosInteligentes';
+import HojaCorte from '../pages/HojaCorte';
 
 const Menu: FunctionalComponent = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -196,6 +197,7 @@ const Menu: FunctionalComponent = () => {
           <Route path="/reportes" component={Reportes} />
           <Route path="/ajustes" component={Ajustes} />
           <Route path="/reportes/pedidos-inteligentes" component={PedidosInteligentes} />
+          <Route path="/reportes/hoja-corte" component={HojaCorte} />
         </Router>
       </div>
     </div>

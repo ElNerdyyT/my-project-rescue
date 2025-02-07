@@ -1,0 +1,119 @@
+/* HojaCorte.css */
+.hoja-corte {
+    font-family: 'Courier New', monospace;
+    width: 21cm; /* Tamaño carta */
+    min-height: 29.7cm;
+    padding: 1.5cm;
+    margin: 0 auto;
+    background: white;
+    box-sizing: border-box;
+    line-height: 1.1;
+  }
+  
+  .encabezado {
+    text-align: center;
+    margin-bottom: 25px;
+  }
+  
+  .titulo-principal {
+    font-size: 18pt;
+    letter-spacing: 2px;
+    margin-bottom: 5px;
+  }
+  
+  .subtitulo {
+    font-size: 14pt;
+    margin-bottom: 15px;
+  }
+  
+  .fecha-hora {
+    font-size: 10pt;
+    margin-bottom: 20px;
+  }
+  
+  .seccion-moneda {
+    margin-bottom: 20px;
+  }
+  
+  .fila-moneda {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+  }
+  
+  .detalles-principales {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+  
+  .total-grande {
+    font-weight: bold;
+    margin: 15px 0;
+  }
+  
+  .faltante-sobrante {
+    display: flex;
+    justify-content: space-between;
+    margin: 25px 0;
+  }
+  
+  .tabla-inferior {
+    border-top: 2px solid black;
+    margin-top: 20px;
+  }
+  
+  .fila-tabla {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    text-align: center;
+  }
+  
+  .columna-tabla {
+    padding: 8px;
+    border-right: 1px solid black;
+  }
+  
+  .columna-tabla:last-child {
+    border-right: none;
+  }
+  
+  .filtros {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+  }
+  
+  .filtros select,
+  .filtros input {
+    font-family: 'Courier New', monospace;
+    padding: 2px 5px;
+    border: 1px solid #000;
+    font-size: 10pt;
+  }
+  
+  /* Estilos específicos para números y alineaciones */
+  .numero {
+    text-align: right;
+    min-width: 80px;
+    display: inline-block;
+  }
+  
+  .alineacion-derecha {
+    text-align: right;
+  }
+  
+  .margen-superior {
+    margin-top: 15px;
+  }
+  
+  .texto-negrita {
+    font-weight: bold;
+  }
+  
+  /* Espaciado específico del PDF */
+  .espacio-linea {
+    margin-bottom: 8px;
+  }
