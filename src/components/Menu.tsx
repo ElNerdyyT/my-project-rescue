@@ -15,6 +15,10 @@ import Reportes from '../pages/Reportes';
 import Ajustes from '../pages/Ajustes';
 import PedidosInteligentes from '../pages/PedidosInteligentes';
 import HojaCorte from '../pages/HojaCorte';
+import Traspasos from '../pages/Traspasos';
+import Facturas from '../pages/Facturas';
+import Negativos from '../pages/Negativos';
+
 
 const Menu: FunctionalComponent = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -198,6 +202,9 @@ const Menu: FunctionalComponent = () => {
           <Route path="/ajustes" component={Ajustes} />
           <Route path="/reportes/pedidos-inteligentes" component={PedidosInteligentes} />
           <Route path="/reportes/hoja-corte" component={HojaCorte} />
+          <Route path="/reportes/traspasos" component={Traspasos} />
+          <Route path="/reportes/facturas" component={Facturas} />
+          <Route path="/reportes/negativos" component={Negativos} />
         </Router>
       </div>
     </div>
