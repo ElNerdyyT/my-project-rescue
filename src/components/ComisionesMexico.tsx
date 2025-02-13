@@ -25,6 +25,7 @@ const DataTable = () => {
   const [endDate, setEndDate] = useState<string>('');
   const [modalData, setModalData] = useState<TableRow[]>([]);
   const [showModal, setShowModal] = useState<boolean>(false);
+  const [selectedSucursal, setSelectedSucursal] = useState<string>('ComisionesEcono1');
 
   useEffect(() => {
     const fetchDateRange = async () => {
@@ -53,52 +54,86 @@ const DataTable = () => {
     }
 
     const fetchData = async () => {
-      const formattedStartDate = new Date(startDate).toISOString().split('T').join(' ').split('.')[0];
-      const formattedEndDate = new Date(endDate).toISOString().split('T').join(' ').split('.')[0];
+      setLoading(true);
+      const formattedStartDate = new Date(startDate)
+        .toISOString()
+        .split('T')
+        .join(' ')
+        .split('.')[0];
+      const formattedEndDate = new Date(endDate)
+        .toISOString()
+        .split('T')
+        .join(' ')
+        .split('.')[0];
+      let supabaseData: any[] = [];
 
-      const { data: supabaseData, error } = await supabase
-        .from('ComisionesMexico')
-        .select('*', { count: 'exact' })
-        .gte('fecha', formattedStartDate)
-        .lte('fecha', formattedEndDate)
-        .order('fecha', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching data:', error.message);
+      if (selectedSucursal === 'General') {
+        // Se unen los datos de las 3 sucursales
+        const tables = ['ComisionesEcono1', 'ComisionesMexico', 'ComisionesMadero'];
+        const promises = tables.map((tableName) =>
+          supabase
+            .from(tableName)
+            .select('*')
+            .gte('fecha', formattedStartDate)
+            .lte('fecha', formattedEndDate)
+            .order('fecha', { ascending: false })
+        );
+        const results = await Promise.all(promises);
+        results.forEach((result) => {
+          if (result.error) {
+            console.error('Error al obtener datos de la tabla:', result.error.message);
+          } else {
+            supabaseData = supabaseData.concat(result.data);
+          }
+        });
+        // Ordenamos globalmente por fecha de mayor a menor
+        supabaseData.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
       } else {
-        const cveArts = [...new Set(supabaseData.map((item: any) => item.cve_art))];
-
-        const { data: articlesData, error: articlesError } = await supabase
-          .from('ArticulosMexico')
-          .select('cve_articulo_a, nombre_comer_a')
-          .in('cve_articulo_a', cveArts);
-
-        if (articlesError) {
-          console.error('Error al obtener nombres de artículos:', articlesError.message);
+        const { data: dataFromTable, error } = await supabase
+          .from(selectedSucursal)
+          .select('*', { count: 'exact' })
+          .gte('fecha', formattedStartDate)
+          .lte('fecha', formattedEndDate)
+          .order('fecha', { ascending: false });
+        if (error) {
+          console.error('Error fetching data:', error.message);
+        } else {
+          supabaseData = dataFromTable;
         }
-
-        const articlesMap = articlesData?.reduce((map: any, article: any) => {
-          map[article.cve_articulo_a] = article.nombre_comer_a;
-          return map;
-        }, {});
-
-        const transformedData = (supabaseData || []).map(item => ({
-          ...item,
-          fecha: item.fecha.split(' ')[0],
-          cantidad: parseFloat(parseFloat(item.cantidad).toFixed(2)),
-          precio_vta: parseFloat(parseFloat(item.precio_vta).toFixed(2)),
-          costo: parseFloat(parseFloat(item.costo).toFixed(2)),
-          importe_tot: parseFloat(parseFloat(item.importe_tot).toFixed(2)),
-          nombresArticulo: articlesMap[item.cve_art] || 'Nombre no disponible',
-        }));
-
-        setData(transformedData);
       }
+
+      const cveArts = [...new Set(supabaseData.map((item: any) => item.cve_art))];
+
+      const { data: articlesData, error: articlesError } = await supabase
+        .from('ArticulosMexico')
+        .select('cve_articulo_a, nombre_comer_a')
+        .in('cve_articulo_a', cveArts);
+
+      if (articlesError) {
+        console.error('Error al obtener nombres de artículos:', articlesError.message);
+      }
+
+      const articlesMap = articlesData?.reduce((map: any, article: any) => {
+        map[article.cve_articulo_a] = article.nombre_comer_a;
+        return map;
+      }, {});
+
+      const transformedData = (supabaseData || []).map((item) => ({
+        ...item,
+        fecha: item.fecha.split(' ')[0],
+        cantidad: parseFloat(parseFloat(item.cantidad).toFixed(2)),
+        precio_vta: parseFloat(parseFloat(item.precio_vta).toFixed(2)),
+        costo: parseFloat(parseFloat(item.costo).toFixed(2)),
+        importe_tot: parseFloat(parseFloat(item.importe_tot).toFixed(2)),
+        nombresArticulo: articlesMap[item.cve_art] || 'Nombre no disponible',
+      }));
+
+      setData(transformedData);
       setLoading(false);
     };
 
     fetchData();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedSucursal]);
 
   useEffect(() => {
     if (searchQuery) {
@@ -114,6 +149,7 @@ const DataTable = () => {
     }
   }, [searchQuery, data]);
 
+  // Agrupamos los datos por nombre
   const groupedData = filteredData.reduce((acc, row) => {
     if (!acc[row.nombre]) {
       acc[row.nombre] = [];
@@ -122,21 +158,29 @@ const DataTable = () => {
     return acc;
   }, {} as Record<string, TableRow[]>);
 
+  // Calculamos los totales generales
   const totalCosto = filteredData.reduce((sum, row) => sum + row.costo * row.cantidad, 0);
   const totalImporte = filteredData.reduce((sum, row) => sum + row.importe_tot, 0);
   const totalUtilidad = totalImporte - totalCosto;
 
-  const totalsByName = Object.keys(groupedData).map((name) => {
-    const rows = groupedData[name];
-    const totalCosto = rows.reduce((sum, row) => sum + row.costo * row.cantidad, 0);
-    const totalImporte = rows.reduce((sum, row) => sum + row.importe_tot, 0);
-    const totalUtilidad = totalImporte - totalCosto;
-    return { name, totalCosto, totalImporte, totalUtilidad };
-  });
+  // Calculamos y ordenamos los totales por nombre (de mayor a menor por Importe Total)
+  const totalsByName = Object.keys(groupedData)
+    .map((name) => {
+      const rows = groupedData[name];
+      const totalCosto = rows.reduce((sum, row) => sum + row.costo * row.cantidad, 0);
+      const totalImporte = rows.reduce((sum, row) => sum + row.importe_tot, 0);
+      const totalUtilidad = totalImporte - totalCosto;
+      return { name, totalCosto, totalImporte, totalUtilidad };
+    })
+    .sort((a, b) => b.totalImporte - a.totalImporte);
 
   const handleOpenModal = (name: string) => {
     const dataForModal = groupedData[name] || [];
-    setModalData(dataForModal);
+    // Ordenamos los detalles de mayor a menor (por fecha)
+    const sortedDataForModal = dataForModal.sort(
+      (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+    );
+    setModalData(sortedDataForModal);
     setShowModal(true);
   };
 
@@ -151,6 +195,24 @@ const DataTable = () => {
 
   return (
     <>
+      {/* Selector de Sucursal */}
+      <div class="row mb-3">
+        <div class="col-md-4">
+          <label for="sucursalSelect">Seleccionar Sucursal:</label>
+          <select
+            id="sucursalSelect"
+            class="form-control"
+            value={selectedSucursal}
+            onChange={(e) => setSelectedSucursal(e.currentTarget.value)}
+          >
+            <option value="ComisionesEcono1">Econo1</option>
+            <option value="ComisionesMexico">México</option>
+            <option value="ComisionesMadero">Madero</option>
+            <option value="General">General (Todas)</option>
+          </select>
+        </div>
+      </div>
+
       {/* Card General con Totales */}
       <div class="row mb-4">
         <div class="col-md-4">
@@ -183,7 +245,11 @@ const DataTable = () => {
       <div class="col-12">
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title">Comisiones México por Nombre</h3>
+            <h3 class="card-title">
+              {selectedSucursal === 'General'
+                ? 'Comisiones de Todas las Sucursales'
+                : `Comisiones ${selectedSucursal.replace('Comisiones', '')} por Nombre`}
+            </h3>
           </div>
           <div class="card-body border-bottom py-3">
             <div class="d-flex">
