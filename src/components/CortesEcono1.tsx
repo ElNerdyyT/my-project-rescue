@@ -21,19 +21,26 @@ interface TableRow {
   totret: string;
 }
 
+const sucursales = [
+  'CortesEcono1',
+  'CortesMadero',
+  'CortesMexico',
+  'CortesLolita',
+  'CortesLopezM',
+  'CortesBaja',
+  'CortesEcono2',
+  'General'
+];
+
 const DataTable = () => {
   const [data, setData] = useState<TableRow[]>([]);
-  const [filteredData, setFilteredData] = useState<TableRow[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(8); // Puedes ajustar el número de elementos por página aquí
-  const [totalPages, setTotalPages] = useState(1);
+  const [selectedSucursal, setSelectedSucursal] = useState('CortesEcono1');
   const [loading, setLoading] = useState<boolean>(true);
-  const [startDate, setStartDate] = useState<string>('');  // Fecha de inicio
-  const [endDate, setEndDate] = useState<string>('');     
+  const [startDate, setStartDate] = useState<string | null>(null);
+  const [endDate, setEndDate] = useState<string | null>(null);
 
   useEffect(() => {
-    // Función para obtener las fechas desde la tabla date_range
     const fetchDateRange = async () => {
       const { data, error } = await supabase
         .from('date_range')
@@ -58,72 +65,54 @@ const DataTable = () => {
     if (!startDate || !endDate) {
       return;
     }
-  
+
     const fetchData = async () => {
-      // Formatear las fechas de inicio y fin para que coincidan con el formato de la base de datos
-      const formattedStartDate = new Date(startDate).toISOString().split('T').join(' ').split('.')[0]; // "YYYY-MM-DD HH:MM:SS"
-      const formattedEndDate = new Date(endDate).toISOString().split('T').join(' ').split('.')[0]; // "YYYY-MM-DD HH:MM:SS"
-  
-      console.log('Fechas formateadas:', { formattedStartDate, formattedEndDate });
-  
-      const { data: supabaseData, error, count } = await supabase
-        .from('CortesEcono1')
-        .select('*', { count: 'exact' })
-        .gte('fecha', formattedStartDate) // Filtra desde la fecha de inicio
-        .lte('fecha', formattedEndDate)   // Filtra hasta la fecha final
-        .order('corte', { ascending: false })
-        .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
-  
-      if (error) {
-        console.error('Error fetching data:', error.message);
+      setLoading(true);
+      let supabaseData: TableRow[] = [];
+      
+      const formattedStartDate = new Date(startDate).toISOString().split('T').join(' ').split('.')[0];
+      const formattedEndDate = new Date(endDate).toISOString().split('T').join(' ').split('.')[0];
+
+      if (selectedSucursal === 'General') {
+        for (const sucursal of sucursales.slice(0, -1)) {
+          const { data, error } = await supabase
+            .from(sucursal)
+            .select('*')
+            .gte('fecha', formattedStartDate)
+            .lte('fecha', formattedEndDate);
+
+          if (!error && data) {
+            supabaseData = [...supabaseData, ...data];
+          }
+        }
+        supabaseData.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
       } else {
-        const transformedData = (supabaseData || []).map(item => ({
-          ...item,
-          fecha: item.fecha.split(' ')[0], // Quitar la hora de 'fecha'
-          hora: item.hora.split(' ')[1] || '', // Obtener solo la parte de la hora si es necesario
-          folini: parseInt(item.folini, 10),
-          folfin: parseInt(item.folfin, 10),
-          totentreg: parseFloat(parseFloat(item.totentreg).toFixed(2)),
-          tottarj: parseFloat(parseFloat(item.tottarj).toFixed(2)),
-          faltan: parseFloat(parseFloat(item.faltan).toFixed(2)),
-          sobran: parseFloat(parseFloat(item.sobran).toFixed(2)),
-          gas: parseFloat(parseFloat(item.gas).toFixed(2)),
-          com: parseFloat(parseFloat(item.com).toFixed(2)),
-          val: parseFloat(parseFloat(item.val).toFixed(2)),
-          totret: parseFloat(parseFloat(item.totret).toFixed(2)),
-        }));
-  
-        setData(transformedData);
-        setTotalPages(count ? Math.ceil(count / itemsPerPage) : 1);
+        const { data, error } = await supabase
+          .from(selectedSucursal)
+          .select('*')
+          .gte('fecha', formattedStartDate)
+          .lte('fecha', formattedEndDate)
+          .order('corte', { ascending: false });
+
+        if (!error && data) {
+          supabaseData = data;
+        }
       }
+      
+      setData(supabaseData);
       setLoading(false);
     };
-  
-    fetchData();
-  }, [currentPage, itemsPerPage, startDate, endDate]);
-  
-  
-  useEffect(() => {
-    if (searchQuery) {
-      setFilteredData(
-        data.filter((row) =>
-          Object.values(row).some((value) =>
-            value.toString().toLowerCase().includes(searchQuery.toLowerCase())
-          )
-        )
-      );
-    } else {
-      setFilteredData(data);
-    }
-  }, [searchQuery, data]);
 
-  const handlePageChange = (newPage: number) => {
-    setCurrentPage(newPage);
-    const tableContainer = document.querySelector('.table-wrapper');
-    if (tableContainer) {
-      tableContainer.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
+    fetchData();
+  }, [selectedSucursal, startDate, endDate]);
+
+  const filteredData = searchQuery
+    ? data.filter((row) =>
+        Object.values(row).some((value) =>
+          value.toString().toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      )
+    : data;
 
   if (loading) {
     return <p>Cargando datos...</p>;
@@ -133,24 +122,20 @@ const DataTable = () => {
     <>
       <div class="col-12">
         <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Datos de Cortes Econofarma I</h3>
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title">Datos de Cortes</h3>
+            <select
+              class="form-select custom-dropdown"
+              value={selectedSucursal}
+              onChange={(e) => setSelectedSucursal(e.currentTarget.value)}
+            >
+              {sucursales.map((sucursal) => (
+                <option key={sucursal} value={sucursal}>{sucursal}</option>
+              ))}
+            </select>
           </div>
           <div class="card-body border-bottom py-3">
             <div class="d-flex">
-              <div class="text-secondary">
-                Mostrar
-                <div class="mx-2 d-inline-block">
-                  <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    value={itemsPerPage}
-                    aria-label="Contador de elementos"
-                    readOnly
-                  />
-                </div>
-                entradas
-              </div>
               <div class="ms-auto text-secondary">
                 Buscar:
                 <div class="ms-2 d-inline-block">
@@ -166,8 +151,8 @@ const DataTable = () => {
             </div>
           </div>
           <div class="table-wrapper" style={{ overflowX: 'auto', width: '100%' }}>
-            <table class="table card-table table-vcenter text-nowrap">
-              <thead>
+            <table class="table table-striped table-hover card-table table-vcenter text-nowrap">
+              <thead class="table-dark">
                 <tr>
                   <th>Corte</th>
                   <th>Turno</th>
@@ -211,44 +196,24 @@ const DataTable = () => {
               </tbody>
             </table>
           </div>
-          <div class="card-footer d-flex align-items-center">
-            <p class="m-0 text-secondary">
-              Mostrando <span>{(currentPage - 1) * itemsPerPage + 1}</span> a <span>{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> de <span>{filteredData.length}</span> entradas
-            </p>
-            <ul class="pagination m-0 ms-auto">
-              <li class={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                <button
-                  class="page-link"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (currentPage > 1) {
-                      handlePageChange(currentPage - 1);
-                    }
-                  }}
-                >
-                  Anterior
-                </button>
-              </li>
-              <li class="page-item active">
-                <span class="page-link">{currentPage}</span>
-              </li>
-              <li class={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                <button
-                  class="page-link"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (currentPage < totalPages) {
-                      handlePageChange(currentPage + 1);
-                    }
-                  }}
-                >
-                  Siguiente
-                </button>
-              </li>
-            </ul>
-          </div>
         </div>
       </div>
+      <style>
+        {`
+          .custom-dropdown {
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            background-color: white;
+            font-size: 16px;
+            cursor: pointer;
+          }
+
+          .custom-dropdown:hover {
+            border-color: #888;
+          }
+        `}
+      </style>
     </>
   );
 };

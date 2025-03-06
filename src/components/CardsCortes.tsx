@@ -61,8 +61,9 @@ const CardsCortes = () => {
       const dataEcono = await fetchTableData('CortesEcono1');
       const dataMexico = await fetchTableData('CortesMexico');
       const dataMadero = await fetchTableData('CortesMadero');
+      const dataLopezM= await fetchTableData('CortesLopezM');
 
-      const combinedData = [...dataEcono, ...dataMexico, ...dataMadero];
+      const combinedData = [...dataEcono, ...dataMexico, ...dataMadero, ...dataLopezM];
 
       interface RowData {
         totentreg: string;

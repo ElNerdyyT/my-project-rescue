@@ -13,7 +13,7 @@ interface TableRow {
   fecha_modificacion: string;
 }
 
-const sucursales = ['ArticulosMexico', 'ArticulosMadero', 'ArticulosEcono1'];
+const sucursales = ['ArticulosMexico', 'ArticulosMadero', 'ArticulosEcono1', 'ArticulosLopezM','ArticulosBaja','ArticulosEcono2','ArticulosLolita'];
 
 const DataTable = () => {
   const [data, setData] = useState<TableRow[]>([]);

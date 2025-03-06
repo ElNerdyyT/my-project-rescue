@@ -69,7 +69,7 @@ const DataTable = () => {
 
       if (selectedSucursal === 'General') {
         // Se unen los datos de las 3 sucursales
-        const tables = ['ComisionesEcono1', 'ComisionesMexico', 'ComisionesMadero'];
+        const tables = ['ComisionesEcono1', 'ComisionesMexico', 'ComisionesMadero', 'ComisionesLopezM'];
         const promises = tables.map((tableName) =>
           supabase
             .from(tableName)
@@ -208,6 +208,7 @@ const DataTable = () => {
             <option value="ComisionesEcono1">Econo1</option>
             <option value="ComisionesMexico">México</option>
             <option value="ComisionesMadero">Madero</option>
+            <option value="ComisionesLopezM">LopezM</option>
             <option value="General">General (Todas)</option>
           </select>
         </div>
