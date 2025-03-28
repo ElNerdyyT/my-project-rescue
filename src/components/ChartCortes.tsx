@@ -20,6 +20,8 @@ const ChartCortes = () => {
   const [totalsMadero, setTotalsMadero] = useState<number[]>([]);
   const [totalsEcono1, setTotalsEcono1] = useState<number[]>([]);
   const [totalsLopezM, setTotalsLopezM] = useState<number[]>([]);
+  const [totalsEcono2, setTotalsEcono2] = useState<number[]>([]);
+
 
 
   useEffect(() => {
@@ -70,12 +72,16 @@ const ChartCortes = () => {
       const maderoTotals = await fetchData('CortesMadero');
       const econo1Totals = await fetchData('CortesEcono1');
       const lopezMTotals = await fetchData('CortesLopezM');
+      const econo2Totals = await fetchData('CortesEcono2');
+
 
 
       setTotalsMexico(mexicoTotals);
       setTotalsMadero(maderoTotals);
       setTotalsEcono1(econo1Totals);
       setTotalsLopezM(lopezMTotals);
+      setTotalsEcono2(econo2Totals);
+
 
     };
 
@@ -121,6 +127,11 @@ const ChartCortes = () => {
             name: 'Cortes LopezM',
             data: totalsLopezM,
             color: '#344444' // Rojo
+          },
+          {
+            name: 'Cortes Econo2',
+            data: totalsEcono2,
+            color: '#af4444' // Rojo
           }
         ],
         xaxis: {

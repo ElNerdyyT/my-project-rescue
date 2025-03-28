@@ -21,21 +21,15 @@ interface TableRow {
   totret: string;
 }
 
-const sucursales = [
-  'CortesEcono1',
-  'CortesMadero',
-  'CortesMexico',
-  'CortesLolita',
-  'CortesLopezM',
-  'CortesBaja',
-  'CortesEcono2',
-  'General'
-];
+interface Props {
+  selectedSucursal: string;
+  onSucursalChange: (sucursal: string) => void;
+  sucursales: string[];
+}
 
-const DataTable = () => {
+const CortesSuc = ({ selectedSucursal, onSucursalChange, sucursales }: Props) => {
   const [data, setData] = useState<TableRow[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSucursal, setSelectedSucursal] = useState('CortesEcono1');
   const [loading, setLoading] = useState<boolean>(true);
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
@@ -45,7 +39,7 @@ const DataTable = () => {
       const { data, error } = await supabase
         .from('date_range')
         .select('start_date, end_date')
-        .single();  // Asumimos que solo hay un registro
+        .single();
 
       if (error) {
         console.error('Error al obtener el rango de fechas:', error.message);
@@ -62,9 +56,7 @@ const DataTable = () => {
   }, []);
 
   useEffect(() => {
-    if (!startDate || !endDate) {
-      return;
-    }
+    if (!startDate || !endDate) return;
 
     const fetchData = async () => {
       setLoading(true);
@@ -74,7 +66,8 @@ const DataTable = () => {
       const formattedEndDate = new Date(endDate).toISOString().split('T').join(' ').split('.')[0];
 
       if (selectedSucursal === 'General') {
-        for (const sucursal of sucursales.slice(0, -1)) {
+        const sucursalesToFetch = sucursales.filter(s => s !== 'General');
+        for (const sucursal of sucursalesToFetch) {
           const { data, error } = await supabase
             .from(sucursal)
             .select('*')
@@ -127,7 +120,7 @@ const DataTable = () => {
             <select
               class="form-select custom-dropdown"
               value={selectedSucursal}
-              onChange={(e) => setSelectedSucursal(e.currentTarget.value)}
+              onChange={(e) => onSucursalChange(e.currentTarget.value)}
             >
               {sucursales.map((sucursal) => (
                 <option key={sucursal} value={sucursal}>{sucursal}</option>
@@ -218,4 +211,4 @@ const DataTable = () => {
   );
 };
 
-export default DataTable;
+export default CortesSuc;

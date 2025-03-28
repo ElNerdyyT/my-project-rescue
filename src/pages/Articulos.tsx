@@ -1,6 +1,6 @@
 import { FunctionalComponent } from 'preact';
 import PageLayout from '../components/PageLayout';
-import ArticulosMexico from '../components/ArticulosMexico';
+import ArticulosSucursales from '../components/ArticulosSucursales';
 
 const Articulos: FunctionalComponent = () => {
   return (
@@ -8,7 +8,7 @@ const Articulos: FunctionalComponent = () => {
       title="Artículos"
       description="Bienvenido al panel de artículos. Aquí puedes ver un resumen del kardex."
     >
-      <ArticulosMexico />
+      <ArticulosSucursales />
     </PageLayout>
   );
 };

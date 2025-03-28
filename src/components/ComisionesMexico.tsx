@@ -25,7 +25,7 @@ const DataTable = () => {
   const [endDate, setEndDate] = useState<string>('');
   const [modalData, setModalData] = useState<TableRow[]>([]);
   const [showModal, setShowModal] = useState<boolean>(false);
-  const [selectedSucursal, setSelectedSucursal] = useState<string>('ComisionesEcono1');
+  const [selectedSucursal, setSelectedSucursal] = useState<string>('General');
 
   useEffect(() => {
     const fetchDateRange = async () => {
@@ -69,7 +69,7 @@ const DataTable = () => {
 
       if (selectedSucursal === 'General') {
         // Se unen los datos de las 3 sucursales
-        const tables = ['ComisionesEcono1', 'ComisionesMexico', 'ComisionesMadero', 'ComisionesLopezM'];
+        const tables = ['ComisionesEcono1', 'ComisionesMadero', 'ComisionesMexico', 'ComisionesLolita', 'ComisionesLopezM', 'ComisionesBaja', 'ComisionesEcono2'];
         const promises = tables.map((tableName) =>
           supabase
             .from(tableName)
@@ -209,6 +209,9 @@ const DataTable = () => {
             <option value="ComisionesMexico">México</option>
             <option value="ComisionesMadero">Madero</option>
             <option value="ComisionesLopezM">LopezM</option>
+            <option value="ComisionesLolita">Lolita</option>
+            <option value="ComisionesBaja">Baja</option>
+            <option value="ComisionesEcono2">Econo2</option>
             <option value="General">General (Todas)</option>
           </select>
         </div>

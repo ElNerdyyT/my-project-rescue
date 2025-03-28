@@ -67,7 +67,7 @@ const DataTable = () => {
       const formattedEndDate = new Date(endDate).toISOString().split('T').join(' ').split('.')[0];
   
       const { data: supabaseData, error } = await supabase
-        .from('KardexMexico')
+        .from('KardexEcono2')
         .select('*')
         .gte('fecha', formattedStartDate)
         .lte('fecha', formattedEndDate)

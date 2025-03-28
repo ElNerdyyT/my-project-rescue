@@ -18,6 +18,7 @@ import HojaCorte from '../pages/HojaCorte';
 import Traspasos from '../pages/Traspasos';
 import Facturas from '../pages/Facturas';
 import Negativos from '../pages/Negativos';
+import Existencias from '../pages/Existencias';
 
 
 const Menu: FunctionalComponent = () => {
@@ -101,6 +102,12 @@ const Menu: FunctionalComponent = () => {
             <a href="/articulos" className="menu-link">
               <span className="menu-icon">💵</span>
               <span>Articulos</span>
+            </a>
+          </li>
+          <li className="menu-item">
+            <a href="/existencias" className="menu-link">
+              <span className="menu-icon">💵</span>
+              <span>Existencias</span>
             </a>
           </li>
         </ul>
@@ -198,6 +205,7 @@ const Menu: FunctionalComponent = () => {
           <Route path="/comisiones" component={Comisiones} />
           <Route path="/kardex" component={Kardex} />
           <Route path="/articulos" component={Articulos} />
+          <Route path="/existencias" component={Existencias} />
           <Route path="/reportes" component={Reportes} />
           <Route path="/ajustes" component={Ajustes} />
           <Route path="/reportes/pedidos-inteligentes" component={PedidosInteligentes} />

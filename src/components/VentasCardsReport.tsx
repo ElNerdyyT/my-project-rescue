@@ -85,7 +85,7 @@ const Dashboard = () => {
 
         // Tipar correctamente el resultado con VentaData[]
         const { data: result, error } = await supabase
-          .from('KardexMexico')
+          .from('KardexEcono2')
           .select('cantidad, costo, ppub, dscto')
           .eq('movto', 1)
           .gte('fecha', formattedStartDate)

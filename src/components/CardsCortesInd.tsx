@@ -2,7 +2,12 @@ import { useState, useEffect } from 'preact/hooks';
 import { supabase } from '../utils/supabaseClient';
 import '../css/CardsCortes.css';
 
-const CardsCortes = () => {
+interface Props {
+  selectedSucursal: string;
+  sucursales: string[];
+}
+
+const CardsCortes = ({ selectedSucursal, sucursales }: Props) => {
   const [data, setData] = useState({
     registros: 0,
     sumaTotEntreg: 0,
@@ -58,25 +63,18 @@ const CardsCortes = () => {
         return data;
       };
 
-      const dataEcono1 = await fetchTableData('CortesEcono1');
-      const dataMadero = await fetchTableData('CortesMadero');
-      const dataMexico = await fetchTableData('CortesMexico');
-      const dataLolita = await fetchTableData('CortesLolita');
-      const dataLopezM = await fetchTableData('CortesLopezM');
-      const dataBaja = await fetchTableData('CortesBaja');
-      const dataEcono2 = await fetchTableData('CortesEcono2');
+      let combinedData = [];
       
+      if (selectedSucursal === 'General') {
+        const sucursalesToFetch = sucursales.filter(s => s !== 'General');
+        const dataPromises = sucursalesToFetch.map(sucursal => fetchTableData(sucursal));
+        const allData = await Promise.all(dataPromises);
+        combinedData = allData.flat();
+      } else {
+        const dataSucursal = await fetchTableData(selectedSucursal);
+        combinedData = dataSucursal;
+      }
 
-      const combinedData = [
-        ...dataEcono1, 
-        ...dataMadero, 
-        ...dataMexico, 
-        ...dataLolita, 
-        ...dataLopezM, 
-        ...dataBaja, 
-        ...dataEcono2
-      ];
-      
       interface RowData {
         totentreg: string;
         tottarj: string;
@@ -107,7 +105,7 @@ const CardsCortes = () => {
     };
 
     fetchData();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedSucursal]);
 
   const Card = ({ title, value, isCurrency, isNegative }: { 
     title: string,
