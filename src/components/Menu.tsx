@@ -23,6 +23,7 @@ import Facturas from '../pages/Facturas';
 import Negativos from '../pages/Negativos';
 import Existencias from '../pages/Existencias';
 import Nomina from '../pages/Nomina';
+import Inventario from '../pages/Inventario';
 
 
 const Menu: FunctionalComponent = () => {
@@ -234,7 +235,7 @@ const Menu: FunctionalComponent = () => {
           <Route path="/reportes" component={Reportes} />
           {/* Added missing report routes based on menu links */}
           <Route path="/reportes/hoja-corte" component={HojaCorte} />
-          <Route path="/reportes/inventario" component={/* Add Inventario component here if exists, e.g., Kardex or a new one */ Kardex} />
+          <Route path="/reportes/inventario" component={Inventario} />
           <Route path="/reportes/facturas" component={Facturas} />
           <Route path="/reportes/ajustes" component={/* Add Ajustes component here if exists, e.g., Ajustes or a new one */ Ajustes} />
           <Route path="/reportes/traspasos" component={Traspasos} />

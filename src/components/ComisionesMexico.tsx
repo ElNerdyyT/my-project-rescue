@@ -14,7 +14,7 @@ interface TableRow {
   importe_tot: number; // Should be number after transformation
   folio: string;
   nombre: string;
-  fecha: string; // Expecting 'YYYY-MM-DD' format after transformation
+  fecha: string; // Expecting 'YYYY-MM-DD' format after transformation from DB (but source is YYYY-MM-DD HH:MM:SS)
 }
 
 // Type for the summary data calculated per salesperson
@@ -44,7 +44,6 @@ const DataTable = () => {
   const [data, setData] = useState<TableRow[]>([]);
   const [filteredData, setFilteredData] = useState<TableRow[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  // Removed unused itemsPerPage state: const [itemsPerPage] = useState(8);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null); // Added error state
   const [startDate, setStartDate] = useState<string>('');
@@ -69,6 +68,7 @@ const DataTable = () => {
   useEffect(() => {
     const fetchDateRange = async () => {
       setError(null); // Reset error on new attempt
+      setLoading(true); // Start loading indicator for dates
       try {
         const { data: dateData, error: dateError } = await supabase
           .from('date_range')
@@ -89,8 +89,9 @@ const DataTable = () => {
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Ocurrió un error al cargar el rango de fechas.');
-        setLoading(false); // Stop loading if dates fail
+        // Don't set loading to false here, let the main data fetch handle it
       }
+      // setLoading(false); // Loading state will be managed by the main data fetch useEffect
     };
 
     fetchDateRange();
@@ -120,21 +121,29 @@ const DataTable = () => {
       }
 
 
-      // Ensure dates are valid before formatting
+      // ----- START OF MODIFICATION: Adapt query date format -----
       let formattedStartDate: string;
       let formattedEndDate: string;
       try {
-        // Add time part for accurate comparison if needed, otherwise date comparison might suffice depending on Supabase config
-         formattedStartDate = new Date(startDate + 'T00:00:00Z').toISOString(); // Start of the day UTC
-         formattedEndDate = new Date(endDate + 'T23:59:59Z').toISOString(); // End of the day UTC
-      } catch (dateError) {
-          console.error("Fechas inválidas:", startDate, endDate, dateError);
+        // Basic validation to ensure startDate and endDate look like YYYY-MM-DD
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+             throw new Error("Formato de fecha inválido. Use YYYY-MM-DD.");
+        }
+
+        // Format dates as strings matching the TEXT column 'YYYY-MM-DD HH:MM:SS'
+        // This allows lexicographical comparison to work correctly for the text 'fecha' column
+        formattedStartDate = startDate + ' 00:00:00'; // e.g., "2025-03-17 00:00:00"
+        formattedEndDate = endDate + ' 23:59:59';     // e.g., "2025-03-17 23:59:59" (Inclusive end for the day)
+
+      } catch (dateError: any) {
+          console.error("Error al formatear fechas para consulta:", startDate, endDate, dateError);
           if (!isCancelled) {
-             setError("Las fechas seleccionadas son inválidas.");
+             setError(dateError.message || "Las fechas seleccionadas son inválidas o no se pudieron formatear.");
              setLoading(false);
           }
           return;
       }
+      // ----- END OF MODIFICATION -----
 
 
       let supabaseData: SupabaseDataRow[] = [];
@@ -147,10 +156,10 @@ const DataTable = () => {
             supabase
               .from(tableName)
               .select('*')
-              .gte('fecha', formattedStartDate)
-              .lte('fecha', formattedEndDate)
+              .gte('fecha', formattedStartDate) // Use the text-formatted date
+              .lte('fecha', formattedEndDate)   // Use the text-formatted date
               // Order within each table fetch if needed, but global sort happens later
-              // .order('fecha', { ascending: false })
+              // .order('fecha', { ascending: false }) // Ordering text might be lexicographical, not chronological
           );
           const results = await Promise.all(promises);
 
@@ -164,8 +173,15 @@ const DataTable = () => {
               supabaseData = supabaseData.concat(result.data);
             }
           });
-          // Global sort after merging
-          supabaseData.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+          // Global sort after merging - IMPORTANT: sorting text dates might be incorrect if format varies!
+          // This assumes all 'fecha' strings are in YYYY-MM-DD HH:MM:SS format for correct sorting.
+          supabaseData.sort((a, b) => {
+             // Use string comparison, but it's less reliable than date objects
+             if (a.fecha < b.fecha) return 1;
+             if (a.fecha > b.fecha) return -1;
+             return 0;
+          });
+
 
         } else {
           // Fetch from the selected single table
@@ -175,10 +191,10 @@ const DataTable = () => {
           }
           const { data: dataFromTable, error: tableError } = await supabase
             .from(tableName)
-            .select('*') // { count: 'exact' } might not be needed if you don't use the count
-            .gte('fecha', formattedStartDate)
-            .lte('fecha', formattedEndDate)
-            .order('fecha', { ascending: false }); // Order here for single table
+            .select('*')
+            .gte('fecha', formattedStartDate) // Use the text-formatted date
+            .lte('fecha', formattedEndDate)   // Use the text-formatted date
+            .order('fecha', { ascending: false }); // Ordering text might be lexicographical
 
           if (isCancelled) return; // Check cancellation after await
 
@@ -199,7 +215,7 @@ const DataTable = () => {
         if (supabaseData.length === 0) {
            // No data found for the period/branch
            setData([]);
-           setLoading(false); // setLoading should be handled in finally
+           // setLoading(false); // setLoading should be handled in finally
            return; // Exit early
         }
 
@@ -242,7 +258,9 @@ const DataTable = () => {
                  cve_art: item.cve_art || '',
                  folio: item.folio || '',
                  nombre: item.nombre || 'Desconocido',
-                 fecha: item.fecha ? item.fecha.split('T')[0] : 'Fecha inválida',
+                 // Keep the original date string format for display, but take only date part
+                 // Note: This assumes the format is always 'YYYY-MM-DD HH:MM:SS'
+                 fecha: item.fecha ? item.fecha.substring(0, 10) : 'Fecha inválida',
                  nombresArticulo: articlesMap[item.cve_art] || 'Nombre no disponible',
                  cantidad: safeParseFloat(item.cantidad),
                  precio_vta: safeParseFloat(item.precio_vta),
@@ -322,9 +340,12 @@ const DataTable = () => {
 
   // --- Modal Handlers ---
   const handleOpenModal = (name: string) => {
-    const dataForModal = (groupedData[name] || []).sort(
-      (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime() // Sort details by date descending
-    );
+    // Sort modal data by the transformed 'fecha' string (YYYY-MM-DD)
+    const dataForModal = (groupedData[name] || []).sort((a, b) => {
+        if (a.fecha < b.fecha) return 1; // Descending sort
+        if (a.fecha > b.fecha) return -1;
+        return 0;
+    });
     setModalData(dataForModal);
     setShowModal(true);
   };
@@ -338,6 +359,7 @@ const DataTable = () => {
   const generatePdf = () => {
     if (totalsByName.length === 0) {
         console.warn("No data available to generate PDF.");
+        alert("No hay datos disponibles para generar el PDF."); // Inform user
         return;
     }
     const doc = new jsPDF();
@@ -381,8 +403,6 @@ const DataTable = () => {
            `$${(overallTotalUtilidad * 0.10).toFixed(2)}`
        ]],
        footStyles: { fillColor: [211, 211, 211], textColor: 0, fontStyle: 'bold'}, // Style footer
-       // Removed unused didDrawPage callback:
-       // didDrawPage: (_data) => { }
     });
 
     // Add filename with dates and branch
@@ -391,15 +411,24 @@ const DataTable = () => {
   };
 
   // --- Render Logic ---
+  // Display loading indicator more consistently
+  const renderLoading = () => (
+     <div class="text-center p-4">
+         <div class="spinner-border text-primary" role="status"></div>
+         <p class="mt-2">{!startDate || !endDate ? 'Esperando rango de fechas...' : 'Cargando datos...'}</p>
+     </div>
+  );
+
   if (loading) {
-    if (!startDate || !endDate) {
-        return <div class="text-center p-4"><p>Esperando rango de fechas...</p></div>;
-    }
-    return <div class="text-center p-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Cargando datos...</p></div>;
+     return renderLoading();
   }
 
   if (error) {
-    return <div class="alert alert-danger m-3" role="alert">Error: {error}</div>;
+    // Show error but still allow controls if dates loaded successfully
+    if (!startDate || !endDate) {
+        return <div class="alert alert-danger m-3" role="alert">Error al cargar rango de fechas: {error}</div>;
+    }
+    // If dates loaded but data fetch failed, show controls + error
   }
 
   // Main component render
@@ -417,6 +446,7 @@ const DataTable = () => {
                 // No need to set loading here, useEffect dependency change handles it
                 setSelectedSucursal((e.target as HTMLSelectElement).value);
             }}
+            disabled={loading} // Disable while loading
           >
             <option value="General">General (Todas)</option>
             {Object.keys(SUCURSAL_TABLES).map(sucursalKey => (
@@ -424,12 +454,13 @@ const DataTable = () => {
             ))}
           </select>
         </div>
-         {/* Optional Date Inputs */}
-         <div class="col-md-4 text-md-end mt-2 mt-md-0">
+        {/* Add placeholder for future date inputs if needed */}
+        {/* <div class="col-md-4"> Placeholder for date inputs </div> */}
+         <div class="col-md-4 text-md-end mt-2 mt-md-0 ms-auto"> {/* Use ms-auto to push button right */}
              <button
                class="btn btn-secondary"
                onClick={generatePdf}
-               disabled={totalsByName.length === 0 || loading}
+               disabled={totalsByName.length === 0 || loading} // Also disable while loading
                title={totalsByName.length === 0 ? "No hay datos para generar el PDF" : "Generar Reporte PDF"}
              >
                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-file-download" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M12 17v-6" /><path d="M9.5 14.5l2.5 2.5l2.5 -2.5" /></svg>
@@ -437,6 +468,10 @@ const DataTable = () => {
              </button>
          </div>
       </div>
+
+      {/* --- Display Error if any, after controls --- */}
+      {error && <div class="alert alert-warning m-3" role="alert">Advertencia: {error}</div>}
+
 
       {/* --- Overall Totals Cards --- */}
       <div class="row mb-4 px-3">
@@ -474,12 +509,15 @@ const DataTable = () => {
               {selectedSucursal === 'General'
                 ? 'Resumen de Comisiones por Vendedor (Todas las Sucursales)'
                 : `Resumen de Comisiones por Vendedor (${selectedSucursal})`}
+                <span class="ms-2 text-muted fs-5">({startDate} al {endDate})</span>
             </h3>
           </div>
           <div class="card-body border-bottom py-3">
             <div class="d-flex flex-wrap justify-content-between">
               <div class="text-secondary mb-2 mb-md-0">
+                {/* Show count based on filtered summary data */}
                 {totalsByName.length} Vendedor{totalsByName.length !== 1 ? 'es' : ''} encontrado{totalsByName.length !== 1 ? 's' : ''}
+                {searchQuery && ` (filtrado de ${data.length} registros totales)`}
               </div>
               <div class="ms-md-auto text-secondary">
                 Buscar en detalles (afecta cálculos):
@@ -528,7 +566,7 @@ const DataTable = () => {
                   <tr>
                     <td colSpan={5} class="text-center text-secondary py-4">
                         {/* Message depends on why it's empty */}
-                        {searchQuery ? 'No hay coincidencias con la búsqueda.' : 'No hay datos para mostrar con los filtros actuales.'}
+                        {loading ? 'Cargando...' : (searchQuery ? 'No hay coincidencias con la búsqueda.' : 'No hay datos para mostrar con los filtros actuales.')}
                     </td>
                   </tr>
                 )}
@@ -541,20 +579,22 @@ const DataTable = () => {
       {/* --- Modal for Sale Details --- */}
       {showModal && (
         <>
+          {/* Backdrop */}
           <div
             class="modal-backdrop fade show"
             style={{ zIndex: 1050 }}
             onClick={handleCloseModal}
           ></div>
+          {/* Modal Dialog */}
           <div
             class="modal fade show d-block"
             tabIndex={-1}
             aria-modal="true"
             role="dialog"
             style={{ zIndex: 1055 }}
-            onClick={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }}
+            onClick={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }} // Close on click outside modal content
           >
-            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable"> {/* Increased size and scrollable */}
               <div class="modal-content">
                 <div class="modal-header">
                   <h5 class="modal-title">Detalles de Ventas: {modalData[0]?.nombre || 'N/A'}</h5>
@@ -563,30 +603,35 @@ const DataTable = () => {
                 <div class="modal-body">
                   {modalData.length > 0 ? (
                     <div class="table-responsive">
-                      <table class="table table-striped table-hover table-sm">
+                      <table class="table table-striped table-hover table-sm"> {/* Added table-sm */}
                         <thead>
                           <tr>
                             <th>Fecha</th>
                             <th>Folio</th>
-                            <th>Articulo</th>
+                            <th>Articulo (Código)</th> {/* Updated header */}
                             <th class="text-end">Cantidad</th>
                             <th class="text-end">Precio Vta.</th>
                             <th class="text-end">Costo Unit.</th>
                             <th class="text-end">Importe Total</th>
-                            {/* <th class="text-end">Utilidad Artículo</th> */}
+                            {/* Uncomment if needed, but calculation is simple
+                             <th class="text-end">Utilidad Artículo</th>
+                             */}
                           </tr>
                         </thead>
                         <tbody>
                           {modalData.map((row) => (
-                            <tr key={`${row.id}-${row.folio}-${row.cve_art}`}>
-                              <td>{row.fecha}</td>
+                            // Use a more robust key if id is not unique across tables/fetches
+                            <tr key={`${row.id}-${row.folio}-${row.cve_art}-${row.fecha}`}>
+                              <td>{row.fecha}</td> {/* Already YYYY-MM-DD from transformation */}
                               <td>{row.folio}</td>
                               <td>{row.nombresArticulo} ({row.cve_art})</td>
                               <td class="text-end">{row.cantidad.toFixed(2)}</td>
                               <td class="text-end">${row.precio_vta.toFixed(2)}</td>
                               <td class="text-end">${row.costo.toFixed(2)}</td>
                               <td class="text-end">${row.importe_tot.toFixed(2)}</td>
-                              {/* <td class="text-end">${(row.importe_tot - (row.costo * row.cantidad)).toFixed(2)}</td> */}
+                              {/* Uncomment if needed
+                              <td class="text-end">${(row.importe_tot - (row.costo * row.cantidad)).toFixed(2)}</td>
+                              */}
                             </tr>
                           ))}
                         </tbody>
