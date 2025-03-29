@@ -1,186 +1,331 @@
 import { useState, useEffect } from 'preact/hooks';
 import { supabase } from '../utils/supabaseClient';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface TableRow {
   id: number;
   cve_empleado: string;
   cve_art: string;
   nombresArticulo: string;
-  cantidad: number;
-  precio_vta: number;
-  costo: number;
-  importe_tot: number;
+  cantidad: number; // Should be number after transformation
+  precio_vta: number; // Should be number after transformation
+  costo: number; // Should be number after transformation
+  importe_tot: number; // Should be number after transformation
   folio: string;
   nombre: string;
-  fecha: string;
+  fecha: string; // Expecting 'YYYY-MM-DD' format after transformation
+}
+
+// Type for the summary data calculated per salesperson
+interface TotalsSummary {
+  name: string;
+  totalCosto: number;
+  totalImporte: number;
+  totalUtilidad: number;
+}
+
+// Type for Supabase data before transformation
+// Use 'any' for flexibility or define a more specific type if structure is consistent
+type SupabaseDataRow = any;
+
+// Define types for Supabase responses for better safety
+interface DateRangeResponse {
+  start_date: string;
+  end_date: string;
+}
+
+interface ArticleResponse {
+  cve_articulo_a: string;
+  nombre_comer_a: string;
 }
 
 const DataTable = () => {
   const [data, setData] = useState<TableRow[]>([]);
   const [filteredData, setFilteredData] = useState<TableRow[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [itemsPerPage] = useState(8);
+  // Removed unused itemsPerPage state: const [itemsPerPage] = useState(8);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null); // Added error state
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [modalData, setModalData] = useState<TableRow[]>([]);
   const [showModal, setShowModal] = useState<boolean>(false);
-  const [selectedSucursal, setSelectedSucursal] = useState<string>('General');
+  const [selectedSucursal, setSelectedSucursal] = useState<string>('General'); // Default to General
 
+  const SUCURSAL_TABLES: Record<string, string> = {
+      'Econo1': 'ComisionesEcono1',
+      'México': 'ComisionesMexico',
+      'Madero': 'ComisionesMadero',
+      'LopezM': 'ComisionesLopezM',
+      'Lolita': 'ComisionesLolita',
+      'Baja': 'ComisionesBaja',
+      'Econo2': 'ComisionesEcono2',
+      // Add more if needed
+  };
+  const ALL_TABLE_NAMES = Object.values(SUCURSAL_TABLES);
+
+  // Fetch initial date range
   useEffect(() => {
     const fetchDateRange = async () => {
-      const { data, error } = await supabase
-        .from('date_range')
-        .select('start_date, end_date')
-        .single();
+      setError(null); // Reset error on new attempt
+      try {
+        const { data: dateData, error: dateError } = await supabase
+          .from('date_range')
+          .select('start_date, end_date')
+          .single<DateRangeResponse>(); // Specify type
 
-      if (error) {
-        console.error('Error al obtener el rango de fechas:', error.message);
-        return;
-      }
+        if (dateError) {
+          throw new Error(`Error al obtener el rango de fechas: ${dateError.message}`);
+        }
 
-      if (data) {
-        setStartDate(data.start_date);
-        setEndDate(data.end_date);
+        if (dateData) {
+          // Basic validation or default setting if needed
+          setStartDate(dateData.start_date || '');
+          setEndDate(dateData.end_date || '');
+        } else {
+             throw new Error('No se encontró el rango de fechas.');
+        }
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || 'Ocurrió un error al cargar el rango de fechas.');
+        setLoading(false); // Stop loading if dates fail
       }
     };
 
     fetchDateRange();
-  }, []);
+  }, []); // Runs once on mount
 
+  // Fetch main commission data when dates or sucursal change
   useEffect(() => {
     if (!startDate || !endDate) {
+      // Don't fetch if dates are not set
+      setLoading(false); // Ensure loading is false if we skip fetching
       return;
     }
 
-    const fetchData = async () => {
-      setLoading(true);
-      const formattedStartDate = new Date(startDate)
-        .toISOString()
-        .split('T')
-        .join(' ')
-        .split('.')[0];
-      const formattedEndDate = new Date(endDate)
-        .toISOString()
-        .split('T')
-        .join(' ')
-        .split('.')[0];
-      let supabaseData: any[] = [];
+    let isCancelled = false; // Flag to prevent state updates after unmount or quick changes
+    const currentSelectedSucursal = selectedSucursal; // Capture state for async operation
 
-      if (selectedSucursal === 'General') {
-        // Se unen los datos de las 3 sucursales
-        const tables = ['ComisionesEcono1', 'ComisionesMadero', 'ComisionesMexico', 'ComisionesLolita', 'ComisionesLopezM', 'ComisionesBaja', 'ComisionesEcono2'];
-        const promises = tables.map((tableName) =>
-          supabase
+    const fetchData = async () => {
+      // Only set loading=true if we are actually going to fetch for the CURRENT selection
+      if (!isCancelled && currentSelectedSucursal === selectedSucursal) {
+          setLoading(true);
+          setError(null); // Reset error state
+          setData([]); // Clear previous data
+          setFilteredData([]); // Clear previous filtered data
+      } else {
+          // If the selection changed before fetch started, just bail out
+          return;
+      }
+
+
+      // Ensure dates are valid before formatting
+      let formattedStartDate: string;
+      let formattedEndDate: string;
+      try {
+        // Add time part for accurate comparison if needed, otherwise date comparison might suffice depending on Supabase config
+         formattedStartDate = new Date(startDate + 'T00:00:00Z').toISOString(); // Start of the day UTC
+         formattedEndDate = new Date(endDate + 'T23:59:59Z').toISOString(); // End of the day UTC
+      } catch (dateError) {
+          console.error("Fechas inválidas:", startDate, endDate, dateError);
+          if (!isCancelled) {
+             setError("Las fechas seleccionadas son inválidas.");
+             setLoading(false);
+          }
+          return;
+      }
+
+
+      let supabaseData: SupabaseDataRow[] = [];
+      let fetchError: string | null = null;
+
+      try {
+        if (currentSelectedSucursal === 'General') {
+          // Fetch from all tables concurrently
+          const promises = ALL_TABLE_NAMES.map((tableName) =>
+            supabase
+              .from(tableName)
+              .select('*')
+              .gte('fecha', formattedStartDate)
+              .lte('fecha', formattedEndDate)
+              // Order within each table fetch if needed, but global sort happens later
+              // .order('fecha', { ascending: false })
+          );
+          const results = await Promise.all(promises);
+
+          if (isCancelled) return; // Check cancellation after await
+
+          results.forEach((result, index) => {
+            if (result.error) {
+              console.error(`Error al obtener datos de ${ALL_TABLE_NAMES[index]}:`, result.error.message);
+              // Optionally collect errors: fetchError = fetchError ? `${fetchError}\n${result.error.message}` : result.error.message;
+            } else if (result.data) {
+              supabaseData = supabaseData.concat(result.data);
+            }
+          });
+          // Global sort after merging
+          supabaseData.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+
+        } else {
+          // Fetch from the selected single table
+          const tableName = SUCURSAL_TABLES[currentSelectedSucursal];
+          if (!tableName) {
+              throw new Error(`Nombre de sucursal no válido: ${currentSelectedSucursal}`);
+          }
+          const { data: dataFromTable, error: tableError } = await supabase
             .from(tableName)
-            .select('*')
+            .select('*') // { count: 'exact' } might not be needed if you don't use the count
             .gte('fecha', formattedStartDate)
             .lte('fecha', formattedEndDate)
-            .order('fecha', { ascending: false })
-        );
-        const results = await Promise.all(promises);
-        results.forEach((result) => {
-          if (result.error) {
-            console.error('Error al obtener datos de la tabla:', result.error.message);
-          } else {
-            supabaseData = supabaseData.concat(result.data);
+            .order('fecha', { ascending: false }); // Order here for single table
+
+          if (isCancelled) return; // Check cancellation after await
+
+          if (tableError) {
+            throw new Error(`Error al obtener datos de ${tableName}: ${tableError.message}`);
           }
-        });
-        // Ordenamos globalmente por fecha de mayor a menor
-        supabaseData.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
-      } else {
-        const { data: dataFromTable, error } = await supabase
-          .from(selectedSucursal)
-          .select('*', { count: 'exact' })
-          .gte('fecha', formattedStartDate)
-          .lte('fecha', formattedEndDate)
-          .order('fecha', { ascending: false });
-        if (error) {
-          console.error('Error fetching data:', error.message);
-        } else {
-          supabaseData = dataFromTable;
+          supabaseData = dataFromTable || [];
         }
+
+        if (isCancelled) return; // Final check before potentially long processing
+
+        if (fetchError) {
+            // If there were non-critical errors during 'General' fetch, set the error state
+            setError((prevError) => prevError ? `${prevError}\nAlgunos datos no pudieron ser cargados: ${fetchError}` : `Algunos datos no pudieron ser cargados: ${fetchError}`);
+        }
+
+        // --- Fetch Article Names ---
+        if (supabaseData.length === 0) {
+           // No data found for the period/branch
+           setData([]);
+           setLoading(false); // setLoading should be handled in finally
+           return; // Exit early
+        }
+
+        const cveArts = [...new Set(supabaseData.map((item) => item.cve_art))].filter(Boolean); // Filter out null/empty keys
+        let articlesMap: Record<string, string> = {};
+
+        if (cveArts.length > 0) {
+            const { data: articlesData, error: articlesError } = await supabase
+            .from('ArticulosMexico') // Assuming this table applies to all branches or is the master list
+            .select('cve_articulo_a, nombre_comer_a')
+            .in('cve_articulo_a', cveArts);
+
+             if (isCancelled) return; // Check cancellation after await
+
+            if (articlesError) {
+              console.error('Error al obtener nombres de artículos:', articlesError.message);
+              setError((prevError) => prevError ? `${prevError}\nError al obtener nombres de artículos.` : 'Error al obtener nombres de artículos.');
+            } else if (articlesData) {
+              articlesMap = articlesData.reduce((map, article: ArticleResponse) => {
+                  map[article.cve_articulo_a] = article.nombre_comer_a;
+                  return map;
+              }, {} as Record<string, string>);
+            }
+        }
+
+        // --- Transform Data ---
+        // Helper function for safely parsing string/number inputs to float
+        const safeParseFloat = (value: any): number => {
+            if (value === null || value === undefined) {
+                return 0; // Handle null/undefined explicitly
+            }
+            const num = parseFloat(value);
+            return isNaN(num) ? 0 : num;
+        };
+
+        const transformedData = supabaseData.map((item): TableRow => {
+             return {
+                 id: item.id,
+                 cve_empleado: item.cve_empleado || '',
+                 cve_art: item.cve_art || '',
+                 folio: item.folio || '',
+                 nombre: item.nombre || 'Desconocido',
+                 fecha: item.fecha ? item.fecha.split('T')[0] : 'Fecha inválida',
+                 nombresArticulo: articlesMap[item.cve_art] || 'Nombre no disponible',
+                 cantidad: safeParseFloat(item.cantidad),
+                 precio_vta: safeParseFloat(item.precio_vta),
+                 costo: safeParseFloat(item.costo),
+                 importe_tot: safeParseFloat(item.importe_tot),
+             };
+         });
+
+        if (!isCancelled) { // Final check before setting state
+            setData(transformedData);
+        }
+
+      } catch (err: any) {
+        console.error('Error en fetchData:', err);
+        if (!isCancelled) { // Only set error if not cancelled
+             setError(err.message || 'Ocurrió un error desconocido al cargar los datos.');
+             setData([]); // Clear data on critical error
+        }
+      } finally {
+         if (!isCancelled) { // Only set loading false if not cancelled
+            setLoading(false);
+         }
       }
-
-      const cveArts = [...new Set(supabaseData.map((item: any) => item.cve_art))];
-
-      const { data: articlesData, error: articlesError } = await supabase
-        .from('ArticulosMexico')
-        .select('cve_articulo_a, nombre_comer_a')
-        .in('cve_articulo_a', cveArts);
-
-      if (articlesError) {
-        console.error('Error al obtener nombres de artículos:', articlesError.message);
-      }
-
-      const articlesMap = articlesData?.reduce((map: any, article: any) => {
-        map[article.cve_articulo_a] = article.nombre_comer_a;
-        return map;
-      }, {});
-
-      const transformedData = (supabaseData || []).map((item) => ({
-        ...item,
-        fecha: item.fecha.split(' ')[0],
-        cantidad: parseFloat(parseFloat(item.cantidad).toFixed(2)),
-        precio_vta: parseFloat(parseFloat(item.precio_vta).toFixed(2)),
-        costo: parseFloat(parseFloat(item.costo).toFixed(2)),
-        importe_tot: parseFloat(parseFloat(item.importe_tot).toFixed(2)),
-        nombresArticulo: articlesMap[item.cve_art] || 'Nombre no disponible',
-      }));
-
-      setData(transformedData);
-      setLoading(false);
     };
 
     fetchData();
-  }, [startDate, endDate, selectedSucursal]);
 
+    // Cleanup function to set the flag on unmount or dependency change
+    return () => {
+      isCancelled = true;
+    };
+
+  }, [startDate, endDate, selectedSucursal]); // Dependencies: run when these change
+
+  // Update filtered data when search query or raw data changes
   useEffect(() => {
-    if (searchQuery) {
+    if (!searchQuery) {
+      setFilteredData(data); // No search, show all data
+    } else {
+      const lowerCaseQuery = searchQuery.toLowerCase();
       setFilteredData(
         data.filter((row) =>
           Object.values(row).some((value) =>
-            value.toString().toLowerCase().includes(searchQuery.toLowerCase())
+            value?.toString().toLowerCase().includes(lowerCaseQuery) // Add null check for safety
           )
         )
       );
-    } else {
-      setFilteredData(data);
     }
-  }, [searchQuery, data]);
+  }, [searchQuery, data]); // Dependencies: search query and the main data array
 
-  // Agrupamos los datos por nombre
+  // --- Calculations ---
+  // Group data by salesperson name using the filtered data
   const groupedData = filteredData.reduce((acc, row) => {
-    if (!acc[row.nombre]) {
-      acc[row.nombre] = [];
+    const nameKey = row.nombre || 'Desconocido'; // Handle potential undefined names
+    if (!acc[nameKey]) {
+      acc[nameKey] = [];
     }
-    acc[row.nombre].push(row);
+    acc[nameKey].push(row);
     return acc;
   }, {} as Record<string, TableRow[]>);
 
-  // Calculamos los totales generales
-  const totalCosto = filteredData.reduce((sum, row) => sum + row.costo * row.cantidad, 0);
-  const totalImporte = filteredData.reduce((sum, row) => sum + row.importe_tot, 0);
-  const totalUtilidad = totalImporte - totalCosto;
-
-  // Calculamos y ordenamos los totales por nombre (de mayor a menor por Importe Total)
-  const totalsByName = Object.keys(groupedData)
+  // Calculate totals per salesperson and sort them
+  const totalsByName: TotalsSummary[] = Object.keys(groupedData)
     .map((name) => {
       const rows = groupedData[name];
-      const totalCosto = rows.reduce((sum, row) => sum + row.costo * row.cantidad, 0);
+      const totalCosto = rows.reduce((sum, row) => sum + (row.costo * row.cantidad), 0);
       const totalImporte = rows.reduce((sum, row) => sum + row.importe_tot, 0);
       const totalUtilidad = totalImporte - totalCosto;
       return { name, totalCosto, totalImporte, totalUtilidad };
     })
-    .sort((a, b) => b.totalImporte - a.totalImporte);
+    .sort((a, b) => b.totalImporte - a.totalImporte); // Sort by total sales amount
 
+  // Calculate overall totals using the filtered data
+  const overallTotalCosto = totalsByName.reduce((sum, totals) => sum + totals.totalCosto, 0);
+  const overallTotalImporte = totalsByName.reduce((sum, totals) => sum + totals.totalImporte, 0);
+  const overallTotalUtilidad = totalsByName.reduce((sum, totals) => sum + totals.totalUtilidad, 0);
+
+  // --- Modal Handlers ---
   const handleOpenModal = (name: string) => {
-    const dataForModal = groupedData[name] || [];
-    // Ordenamos los detalles de mayor a menor (por fecha)
-    const sortedDataForModal = dataForModal.sort(
-      (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+    const dataForModal = (groupedData[name] || []).sort(
+      (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime() // Sort details by date descending
     );
-    setModalData(sortedDataForModal);
+    setModalData(dataForModal);
     setShowModal(true);
   };
 
@@ -189,183 +334,267 @@ const DataTable = () => {
     setModalData([]);
   };
 
+  // --- PDF Generation ---
+  const generatePdf = () => {
+    if (totalsByName.length === 0) {
+        console.warn("No data available to generate PDF.");
+        return;
+    }
+    const doc = new jsPDF();
+    const tableColumn: string[] = ["Nombre", "Total Costo", "Total Importe", "Utilidad Total", "Comisión (10%)"];
+    const tableRows: (string | number)[][] = [];
+
+    totalsByName.forEach(totals => {
+      const commission = totals.totalUtilidad * 0.10;
+      const rowData = [
+        totals.name,
+        `$${totals.totalCosto.toFixed(2)}`,
+        `$${totals.totalImporte.toFixed(2)}`,
+        `$${totals.totalUtilidad.toFixed(2)}`,
+        `$${commission.toFixed(2)}`
+      ];
+      tableRows.push(rowData);
+    });
+
+    const dateStr = startDate && endDate ? `${startDate} al ${endDate}` : 'Rango no definido';
+    const branchName = selectedSucursal === 'General' ? 'Todas las Sucursales' : selectedSucursal;
+    const title = `Reporte de Comisiones - ${branchName}`;
+
+    doc.setFontSize(18);
+    doc.text(title, 14, 20);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Periodo: ${dateStr}`, 14, 30);
+
+    // Add table using autoTable
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 35, // Start table below the title and date
+      theme: 'striped', // Optional theme: 'striped', 'grid', 'plain'
+      headStyles: { fillColor: [22, 160, 133] }, // Green header
+       foot: [[ // Footer row data
+           'TOTAL GENERAL',
+           `$${overallTotalCosto.toFixed(2)}`,
+           `$${overallTotalImporte.toFixed(2)}`,
+           `$${overallTotalUtilidad.toFixed(2)}`,
+           `$${(overallTotalUtilidad * 0.10).toFixed(2)}`
+       ]],
+       footStyles: { fillColor: [211, 211, 211], textColor: 0, fontStyle: 'bold'}, // Style footer
+       // Removed unused didDrawPage callback:
+       // didDrawPage: (_data) => { }
+    });
+
+    // Add filename with dates and branch
+     const filename = `Reporte_Comisiones_${branchName.replace(/\s+/g, '_')}_${startDate}_al_${endDate}.pdf`;
+    doc.save(filename);
+  };
+
+  // --- Render Logic ---
   if (loading) {
-    return <p>Cargando datos...</p>;
+    if (!startDate || !endDate) {
+        return <div class="text-center p-4"><p>Esperando rango de fechas...</p></div>;
+    }
+    return <div class="text-center p-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Cargando datos...</p></div>;
   }
 
+  if (error) {
+    return <div class="alert alert-danger m-3" role="alert">Error: {error}</div>;
+  }
+
+  // Main component render
   return (
     <>
-      {/* Selector de Sucursal */}
-      <div class="row mb-3">
+      {/* --- Controls: Sucursal Selector --- */}
+      <div class="row mb-3 align-items-end px-3">
         <div class="col-md-4">
-          <label for="sucursalSelect">Seleccionar Sucursal:</label>
+          <label for="sucursalSelect" class="form-label">Seleccionar Sucursal:</label>
           <select
             id="sucursalSelect"
-            class="form-control"
+            class="form-select"
             value={selectedSucursal}
-            onChange={(e) => setSelectedSucursal(e.currentTarget.value)}
+            onChange={(e) => {
+                // No need to set loading here, useEffect dependency change handles it
+                setSelectedSucursal((e.target as HTMLSelectElement).value);
+            }}
           >
-            <option value="ComisionesEcono1">Econo1</option>
-            <option value="ComisionesMexico">México</option>
-            <option value="ComisionesMadero">Madero</option>
-            <option value="ComisionesLopezM">LopezM</option>
-            <option value="ComisionesLolita">Lolita</option>
-            <option value="ComisionesBaja">Baja</option>
-            <option value="ComisionesEcono2">Econo2</option>
             <option value="General">General (Todas)</option>
+            {Object.keys(SUCURSAL_TABLES).map(sucursalKey => (
+                 <option key={sucursalKey} value={sucursalKey}>{sucursalKey}</option>
+            ))}
           </select>
         </div>
+         {/* Optional Date Inputs */}
+         <div class="col-md-4 text-md-end mt-2 mt-md-0">
+             <button
+               class="btn btn-secondary"
+               onClick={generatePdf}
+               disabled={totalsByName.length === 0 || loading}
+               title={totalsByName.length === 0 ? "No hay datos para generar el PDF" : "Generar Reporte PDF"}
+             >
+               <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-file-download" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M12 17v-6" /><path d="M9.5 14.5l2.5 2.5l2.5 -2.5" /></svg>
+               <span class="ms-1">Generar PDF</span>
+             </button>
+         </div>
       </div>
 
-      {/* Card General con Totales */}
-      <div class="row mb-4">
-        <div class="col-md-4">
-          <div class="card text-white bg-primary">
+      {/* --- Overall Totals Cards --- */}
+      <div class="row mb-4 px-3">
+        <div class="col-lg-4 col-md-6 mb-3">
+          <div class="card text-white bg-danger h-100">
             <div class="card-body">
               <h5 class="card-title">Total Costo General</h5>
-              <p class="card-text">${totalCosto.toFixed(2)}</p>
+              <p class="card-text fs-4 fw-bold">${overallTotalCosto.toFixed(2)}</p>
             </div>
           </div>
         </div>
-        <div class="col-md-4">
-          <div class="card text-white bg-success">
+        <div class="col-lg-4 col-md-6 mb-3">
+          <div class="card text-white bg-success h-100">
             <div class="card-body">
               <h5 class="card-title">Total Importe General</h5>
-              <p class="card-text">${totalImporte.toFixed(2)}</p>
+              <p class="card-text fs-4 fw-bold">${overallTotalImporte.toFixed(2)}</p>
             </div>
           </div>
         </div>
-        <div class="col-md-4">
-          <div class="card text-white bg-info">
+        <div class="col-lg-4 col-md-12 mb-3">
+           <div class="card text-dark bg-warning h-100">
             <div class="card-body">
               <h5 class="card-title">Utilidad Total General</h5>
-              <p class="card-text">${totalUtilidad.toFixed(2)}</p>
+              <p class="card-text fs-4 fw-bold">${overallTotalUtilidad.toFixed(2)}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Tabla de Datos por Nombre */}
-      <div class="col-12">
+      {/* --- Summary Table per Salesperson --- */}
+      <div class="col-12 px-3">
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">
               {selectedSucursal === 'General'
-                ? 'Comisiones de Todas las Sucursales'
-                : `Comisiones ${selectedSucursal.replace('Comisiones', '')} por Nombre`}
+                ? 'Resumen de Comisiones por Vendedor (Todas las Sucursales)'
+                : `Resumen de Comisiones por Vendedor (${selectedSucursal})`}
             </h3>
           </div>
           <div class="card-body border-bottom py-3">
-            <div class="d-flex">
-              <div class="text-secondary">
-                Mostrar
-                <div class="mx-2 d-inline-block">
-                  <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    value={itemsPerPage}
-                    aria-label="Contador de elementos"
-                    readOnly
-                  />
-                </div>
-                entradas
+            <div class="d-flex flex-wrap justify-content-between">
+              <div class="text-secondary mb-2 mb-md-0">
+                {totalsByName.length} Vendedor{totalsByName.length !== 1 ? 'es' : ''} encontrado{totalsByName.length !== 1 ? 's' : ''}
               </div>
-              <div class="ms-auto text-secondary">
-                Buscar:
-                <div class="ms-2 d-inline-block">
+              <div class="ms-md-auto text-secondary">
+                Buscar en detalles (afecta cálculos):
+                <div class="ms-2 d-inline-block" style={{minWidth: '200px'}}>
                   <input
-                    type="text"
+                    type="search"
                     class="form-control form-control-sm"
                     value={searchQuery}
-                    onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                    aria-label="Buscar"
+                    onInput={(e) => setSearchQuery((e.target as HTMLInputElement).value)}
+                    aria-label="Buscar en detalles"
+                    placeholder="Buscar por artículo, folio, etc..."
+                    disabled={loading} // Disable search while loading affects filteredData
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="table-wrapper" style={{ overflowX: 'auto', width: '100%' }}>
-            <table class="table card-table table-vcenter text-nowrap">
+          <div class="table-responsive">
+            <table class="table card-table table-vcenter text-nowrap datatable table-hover">
               <thead>
                 <tr>
-                  <th>Nombre</th>
-                  <th>Total Costo</th>
-                  <th>Total Importe</th>
-                  <th>Utilidad Total</th>
-                  <th>Acción</th>
+                  <th>Nombre Vendedor</th>
+                  <th class="text-end">Total Costo</th>
+                  <th class="text-end">Total Importe</th>
+                  <th class="text-end">Utilidad Total</th>
+                  <th class="text-center">Acción</th>
                 </tr>
               </thead>
               <tbody>
-                {totalsByName.map((totals) => (
-                  <tr key={totals.name}>
-                    <td>{totals.name}</td>
-                    <td>${totals.totalCosto.toFixed(2)}</td>
-                    <td>${totals.totalImporte.toFixed(2)}</td>
-                    <td>${totals.totalUtilidad.toFixed(2)}</td>
-                    <td>
-                      <button class="btn btn-info" onClick={() => handleOpenModal(totals.name)}>
-                        Ver Detalles
-                      </button>
+                {totalsByName.length > 0 ? (
+                  totalsByName.map((totals) => (
+                    <tr key={totals.name}>
+                      <td>{totals.name}</td>
+                      <td class="text-end">${totals.totalCosto.toFixed(2)}</td>
+                      <td class="text-end">${totals.totalImporte.toFixed(2)}</td>
+                      <td class="text-end">${totals.totalUtilidad.toFixed(2)}</td>
+                      <td class="text-center">
+                        <button class="btn btn-info btn-sm" onClick={() => handleOpenModal(totals.name)} disabled={loading}>
+                          Ver Detalles
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} class="text-center text-secondary py-4">
+                        {/* Message depends on why it's empty */}
+                        {searchQuery ? 'No hay coincidencias con la búsqueda.' : 'No hay datos para mostrar con los filtros actuales.'}
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
         </div>
       </div>
 
-      {/* Modal con detalles de ventas */}
+      {/* --- Modal for Sale Details --- */}
       {showModal && (
         <>
           <div
-            class="modal-overlay"
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
-              zIndex: 1040,
-            }}
+            class="modal-backdrop fade show"
+            style={{ zIndex: 1050 }}
             onClick={handleCloseModal}
           ></div>
-          <div class="modal fade show" style={{ display: 'block', zIndex: 1050 }} aria-modal="true" role="dialog">
-            <div class="modal-dialog modal-lg">
+          <div
+            class="modal fade show d-block"
+            tabIndex={-1}
+            aria-modal="true"
+            role="dialog"
+            style={{ zIndex: 1055 }}
+            onClick={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }}
+          >
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
               <div class="modal-content">
                 <div class="modal-header">
-                  <h5 class="modal-title">Detalles de Ventas: {modalData[0]?.nombre}</h5>
+                  <h5 class="modal-title">Detalles de Ventas: {modalData[0]?.nombre || 'N/A'}</h5>
                   <button type="button" class="btn-close" onClick={handleCloseModal} aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                  <table class="table">
-                    <thead>
-                      <tr>
-                        <th>Articulo</th>
-                        <th>Cantidad</th>
-                        <th>Precio de Venta</th>
-                        <th>Costo</th>
-                        <th>Importe Total</th>
-                        <th>Folio</th>
-                        <th>Fecha</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {modalData.map((row) => (
-                        <tr key={row.id}>
-                          <td>{row.nombresArticulo}</td>
-                          <td>{row.cantidad}</td>
-                          <td>{row.precio_vta}</td>
-                          <td>{row.costo}</td>
-                          <td>{row.importe_tot}</td>
-                          <td>{row.folio}</td>
-                          <td>{row.fecha}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  {modalData.length > 0 ? (
+                    <div class="table-responsive">
+                      <table class="table table-striped table-hover table-sm">
+                        <thead>
+                          <tr>
+                            <th>Fecha</th>
+                            <th>Folio</th>
+                            <th>Articulo</th>
+                            <th class="text-end">Cantidad</th>
+                            <th class="text-end">Precio Vta.</th>
+                            <th class="text-end">Costo Unit.</th>
+                            <th class="text-end">Importe Total</th>
+                            {/* <th class="text-end">Utilidad Artículo</th> */}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {modalData.map((row) => (
+                            <tr key={`${row.id}-${row.folio}-${row.cve_art}`}>
+                              <td>{row.fecha}</td>
+                              <td>{row.folio}</td>
+                              <td>{row.nombresArticulo} ({row.cve_art})</td>
+                              <td class="text-end">{row.cantidad.toFixed(2)}</td>
+                              <td class="text-end">${row.precio_vta.toFixed(2)}</td>
+                              <td class="text-end">${row.costo.toFixed(2)}</td>
+                              <td class="text-end">${row.importe_tot.toFixed(2)}</td>
+                              {/* <td class="text-end">${(row.importe_tot - (row.costo * row.cantidad)).toFixed(2)}</td> */}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p class="text-center text-secondary">No hay detalles disponibles.</p>
+                  )}
                 </div>
                 <div class="modal-footer">
                   <button type="button" class="btn btn-secondary" onClick={handleCloseModal}>

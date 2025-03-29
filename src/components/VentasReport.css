@@ -1,0 +1,226 @@
+/* VentasReport.css - Integrated Version */
+
+/* General container for the table report section */
+.ventas-report-container {
+  font-family: sans-serif;
+  padding: 15px;
+  background-color: #f8f9fa; /* Light background */
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-top: 1rem; /* Added margin from previous step */
+}
+
+h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #333;
+  font-size: 1.5rem; /* Keep smaller h2 */
+}
+
+/* --- Filter Controls Styling --- */
+/* Keep the general container style, but remove flex properties */
+.filter-controls {
+  /* display: flex; */ /* REMOVED - Handled by Bootstrap 'row' */
+  /* flex-wrap: wrap; */ /* REMOVED */
+  /* gap: 15px; */ /* REMOVED - Handled by Bootstrap 'g-*' */
+  margin-bottom: 20px; /* Keep */
+  padding: 15px; /* Keep */
+  background-color: #fff; /* Keep */
+  border-radius: 6px; /* Keep */
+  border: 1px solid #dee2e6; /* Keep */
+}
+
+/* Remove flexbox styling for individual items */
+.filter-item {
+  /* display: flex; */ /* REMOVED */
+  /* flex-direction: column; */ /* REMOVED */
+  /* gap: 5px; */ /* REMOVED */
+  /* Styles for elements INSIDE the column will apply */
+}
+
+/* Styling for labels within the filter controls (now using Bootstrap grid) */
+.filter-controls .form-label {
+  font-weight: 500; /* Keep adjusted weight */
+  font-size: 0.8rem; /* Keep smaller size */
+  color: #555; /* Keep color */
+  margin-bottom: 0.25rem; /* Keep spacing */
+  display: block; /* Ensure it takes space */
+}
+
+/* Keep general styling for inputs/selects */
+.filter-controls select,
+.filter-controls input[type="search"] {
+  /* Use Bootstrap classes like form-select-sm, form-control-sm first */
+  /* Original styles below act as fallback or supplement */
+  padding: 0.25rem 0.5rem; /* Adjust padding for sm controls */
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.875rem; /* Standard sm font size */
+}
+
+/* Specific for grouped dropdowns */
+.filter-controls .input-group .form-select {
+    min-width: 60px;
+    flex-grow: 1;
+    /* Inherits padding/font-size from above or Bootstrap's sm class */
+}
+
+/* Keep search input specific width if needed, but Bootstrap cols often manage width */
+.filter-controls input[type="search"] {
+   /* min-width: 200px; */ /* Optional: Can keep or let column width dictate */
+}
+
+/* Remove rule pushing search right using margin - handled by Bootstrap ms-auto on col */
+.filter-item-search {
+  /* margin-left: auto; */ /* REMOVED */
+}
+
+
+/* Keep focus styles */
+.filter-controls select:focus,
+.filter-controls input:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* --- Loading/Error/No-Data Styling (Keep as is) --- */
+.loading-indicator,
+.error-message,
+.no-data-message {
+  text-align: center;
+  padding: 20px;
+  margin-top: 20px;
+  border-radius: 4px;
+}
+
+.loading-indicator {
+  color: #007bff;
+}
+
+.error-message {
+  color: #dc3545;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+}
+
+.no-data-message {
+  color: #6c757d;
+  background-color: #e9ecef;
+  border: 1px solid #dee2e6;
+}
+
+/* --- Table Styling (Keep as is) --- */
+.table-container {
+   max-width: 100%;
+   overflow-x: auto;
+   margin-top: 10px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 5px;
+  background-color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.data-table th,
+.data-table td {
+  border: 1px solid #dee2e6;
+  padding: 8px 10px; /* Adjusted padding slightly */
+  text-align: left;
+  font-size: 0.85em; /* Keep smaller font */
+  white-space: nowrap;
+}
+
+.data-table th {
+  background-color: #e9ecef;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.data-table tbody tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+
+.data-table tbody tr:hover {
+  background-color: #e2e6ea;
+}
+
+/* Specific cell styling (Keep as is) */
+.number-cell,
+.currency-cell {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.articulo-cell {
+    min-width: 200px; /* Adjusted min-width slightly */
+    white-space: normal;
+}
+.negative-utilidad {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* --- Pagination Styling (Keep as is, maybe adjust padding/font on buttons) --- */
+.pagination-controls {
+  display: flex;
+  /* justify-content: space-between; */ /* Let Bootstrap handle center */
+  align-items: center;
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border-top: 1px solid #dee2e6;
+}
+/* Specific centering for the total-only view */
+.pagination-controls.justify-content-center {
+    justify-content: center !important;
+}
+
+
+.pagination-controls button {
+  padding: 6px 12px; /* Match btn-sm */
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-size: 0.875rem; /* Match btn-sm */
+}
+
+.pagination-controls button:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.pagination-controls button:disabled {
+  background-color: #ced4da;
+  cursor: not-allowed;
+}
+
+.pagination-controls span {
+  font-size: 0.9em; /* Keep slightly smaller font */
+  color: #333;
+  margin: 0 10px; /* Keep margin */
+}
+
+
+/* Remove responsive adjustments previously targeting flexbox */
+/* @media (max-width: 768px) { */
+  /* .filter-controls { */
+    /* flex-direction: column; */ /* REMOVED */
+    /* align-items: stretch; */ /* REMOVED */
+  /* } */
+  /* .filter-item-search { */
+    /* margin-left: 0; */ /* REMOVED */
+  /* } */
+  /* Keep pagination stacking if desired, or let default flex handle it */
+  /* .pagination-controls { */
+    /* flex-direction: column; */
+    /* gap: 10px; */
+  /* } */
+/* } */

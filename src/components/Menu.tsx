@@ -1,7 +1,10 @@
+// --- START OF FILE Menu.tsx ---
+
 import { FunctionalComponent } from 'preact';
 import { useState } from 'preact/hooks';
-import { Router, Route } from 'preact-router';
+import { Router, Route, route } from 'preact-router'; // Import route for programmatic navigation
 import LogoutButton from './LogoutButton';
+import DateRangeSelector from './DateRangeSelector'; // Import the DateRangeSelector
 import '../css/Menu.css';
 
 /** Componentes */
@@ -19,6 +22,7 @@ import Traspasos from '../pages/Traspasos';
 import Facturas from '../pages/Facturas';
 import Negativos from '../pages/Negativos';
 import Existencias from '../pages/Existencias';
+import Nomina from '../pages/Nomina';
 
 
 const Menu: FunctionalComponent = () => {
@@ -28,86 +32,101 @@ const Menu: FunctionalComponent = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
+  // Function to handle navigation and close sidebar on mobile
+  const handleNav = (path: string) => {
+    route(path); // Programmatically navigate
+    if (window.innerWidth < 768) { // Or your mobile breakpoint
+        setIsSidebarOpen(false);
+    }
+  };
+
+
   return (
     <div className="menu-container">
       {/* Barra superior */}
       <div className="top-bar">
-        <button 
+        <button
           className="menu-toggle"
           onClick={toggleSidebar}
           aria-label="Toggle menu"
+          aria-expanded={isSidebarOpen} // Add aria-expanded
         >
           <span className="menu-icon">☰</span>
         </button>
-        <div className="search-bar">
-          <input
-            type="text"
-            placeholder="Buscar..."
-            className="search-input"
-          />
-          <span className="search-icon">🔍</span>
+
+        {/* Date Range Selector Container */}
+        <div className="top-bar-date-selector">
+           <DateRangeSelector />
         </div>
-      
+
+        {/* Notification Icon */}
         <div className="notification-badge">
           <span className="notification-icon">🔔</span>
-          <span className="notification-count">1</span>
+          <span className="notification-count">1</span> {/* Example count */}
         </div>
       </div>
 
-      {/* Barra lateral */}
-      {/* Overlay para móviles */}
+      {/* Overlay for mobile */}
       <div className={`overlay ${isSidebarOpen ? 'active' : ''}`} onClick={toggleSidebar}></div>
-      
-      {/* Barra lateral */}
+
+      {/* Sidebar */}
       <nav className={`sidebar ${isSidebarOpen ? 'active' : ''}`}>
         {/* Logo */}
-        <div className="logo">
+        <div className="logo" onClick={() => handleNav('/')} style={{ cursor: 'pointer' }}>
           <span className="logo-blue">Dash</span>
           <span className="logo-black">Farmacia</span>
         </div>
 
-        {/* Menú principal */}
+        {/* Menu Principal */}
+        {/* Use buttons or divs with onClick for navigation to ensure sidebar closes */}
         <ul className="menu">
-          <li className="menu-item active">
-            <a href="/" className="menu-link" aria-current="page">
+          <li className="menu-item"> {/* Removed 'active' class, Router will handle this */}
+            <a href="/" onClick={(e) => { e.preventDefault(); handleNav('/'); }} className="menu-link">
               <span className="menu-icon">🏠</span>
               <span>Análisis</span>
             </a>
           </li>
           <li className="menu-item">
-            <a href="/cortes" className="menu-link">
+            <a href="/cortes" onClick={(e) => { e.preventDefault(); handleNav('/cortes'); }} className="menu-link">
               <span className="menu-icon">📊</span>
               <span>Cortes</span>
             </a>
           </li>
-          <li className="menu-item">
-            <a href="/kardex" className="menu-link">
+           {/* ... Add onClick={(e) => { e.preventDefault(); handleNav('/path'); }} to other links ... */}
+           <li className="menu-item">
+            <a href="/kardex" onClick={(e) => { e.preventDefault(); handleNav('/kardex'); }} className="menu-link">
               <span className="menu-icon">📋</span>
               <span>Kardex</span>
             </a>
           </li>
           <li className="menu-item">
-            <a href="/salidas" className="menu-link">
+            <a href="/salidas" onClick={(e) => { e.preventDefault(); handleNav('/salidas'); }} className="menu-link">
               <span className="menu-icon">📄</span>
               <span>Salidas</span>
             </a>
           </li>
           <li className="menu-item">
-            <a href="/comisiones" className="menu-link">
+            <a href="/comisiones" onClick={(e) => { e.preventDefault(); handleNav('/comisiones'); }} className="menu-link">
               <span className="menu-icon">📈</span>
               <span>Comisiones</span>
             </a>
           </li>
           <li className="menu-item">
-            <a href="/articulos" className="menu-link">
-              <span className="menu-icon">💵</span>
+            <a href="/articulos" onClick={(e) => { e.preventDefault(); handleNav('/articulos'); }} className="menu-link">
+              <span className="menu-icon">💊</span> {/* Changed icon */}
               <span>Articulos</span>
             </a>
           </li>
           <li className="menu-item">
-            <a href="/existencias" className="menu-link">
-              <span className="menu-icon">💵</span>
+            <a href="/existencias" onClick={(e) => { e.preventDefault(); handleNav('/existencias'); }} className="menu-link">
+              <span className="menu-icon">📦</span> {/* Changed icon */}
               <span>Existencias</span>
+            </a>
+          </li>
+          <li className="menu-item">
+            <a href="/nomina" onClick={(e) => { e.preventDefault(); handleNav('/nomina'); }} className="menu-link">
+              <span className="menu-icon">👥</span> {/* Changed icon */}
+              <span>Nomina</span>
             </a>
           </li>
         </ul>
@@ -116,51 +135,54 @@ const Menu: FunctionalComponent = () => {
         <div className="menu-section">
           <h4 className="section-title">Reportes</h4>
           <ul className="menu">
+             {/* ... Add onClick={(e) => { e.preventDefault(); handleNav('/path'); }} to report links ... */}
             <li className="menu-item">
-              <a href="/reportes" className="menu-link">
-                <span className="menu-icon">📊</span>
+              <a href="/reportes" onClick={(e) => { e.preventDefault(); handleNav('/reportes'); }} className="menu-link">
+                <span className="menu-icon">💰</span> {/* Changed icon */}
                 <span>Utilidad</span>
               </a>
             </li>
             <li className="menu-item">
-              <a href="/reportes/hoja-corte" className="menu-link">
+              <a href="/reportes/hoja-corte" onClick={(e) => { e.preventDefault(); handleNav('/reportes/hoja-corte'); }} className="menu-link">
                 <span className="menu-icon">📄</span>
                 <span>Hoja de corte</span>
               </a>
             </li>
             <li className="menu-item">
-              <a href="/reportes/inventario" className="menu-link">
+                {/* Note: Inventario link was missing, added /reportes/inventario route below if needed */}
+              <a href="/reportes/inventario" onClick={(e) => { e.preventDefault(); handleNav('/reportes/inventario'); }} className="menu-link">
                 <span className="menu-icon">📋</span>
                 <span>Inventario</span>
               </a>
             </li>
             <li className="menu-item">
-              <a href="/reportes/facturas" className="menu-link">
-                <span className="menu-icon">📄</span>
+              <a href="/reportes/facturas" onClick={(e) => { e.preventDefault(); handleNav('/reportes/facturas'); }} className="menu-link">
+                <span className="menu-icon">🧾</span> {/* Changed icon */}
                 <span>Facturas</span>
               </a>
             </li>
             <li className="menu-item">
-              <a href="/reportes/ajustes" className="menu-link">
+               {/* Note: Ajustes link was missing, added /reportes/ajustes route below if needed */}
+              <a href="/reportes/ajustes" onClick={(e) => { e.preventDefault(); handleNav('/reportes/ajustes'); }} className="menu-link">
                 <span className="menu-icon">⚙️</span>
                 <span>Ajustes</span>
               </a>
             </li>
             <li className="menu-item">
-              <a href="/reportes/traspasos" className="menu-link">
+              <a href="/reportes/traspasos" onClick={(e) => { e.preventDefault(); handleNav('/reportes/traspasos'); }} className="menu-link">
                 <span className="menu-icon">🔄</span>
                 <span>Traspasos</span>
               </a>
             </li>
             <li className="menu-item">
-              <a href="/reportes/negativos" className="menu-link">
+              <a href="/reportes/negativos" onClick={(e) => { e.preventDefault(); handleNav('/reportes/negativos'); }} className="menu-link">
                 <span className="menu-icon">➖</span>
                 <span>Negativos</span>
               </a>
             </li>
             <li className="menu-item">
-              <a href="/reportes/pedidos-inteligentes" className="menu-link">
-                <span className="menu-icon">🛍️</span>
+              <a href="/reportes/pedidos-inteligentes" onClick={(e) => { e.preventDefault(); handleNav('/reportes/pedidos-inteligentes'); }} className="menu-link">
+                <span className="menu-icon">💡</span> {/* Changed icon */}
                 <span>Pedidos Inteligente</span>
               </a>
             </li>
@@ -172,7 +194,7 @@ const Menu: FunctionalComponent = () => {
           <div className="menu-section">
             <ul className="menu">
               <li className="menu-item">
-                <a href="/ajustes" className="menu-link">
+                <a href="/ajustes" onClick={(e) => { e.preventDefault(); handleNav('/ajustes'); }} className="menu-link">
                   <span className="menu-icon">⚙️</span>
                   <span>Ajustes</span>
                 </a>
@@ -186,9 +208,11 @@ const Menu: FunctionalComponent = () => {
           {/* Perfil de usuario */}
           <div className="user-profile">
             <div className="user-avatar">
-              <span className="user-icon">👤</span>
+              {/* Consider using an actual image or initials */}
+              <span className="user-icon" aria-label="User avatar">👤</span>
             </div>
             <div className="user-info">
+              {/* Replace with dynamic data if available */}
               <span className="user-name">Admin</span>
               <span className="user-role">Administrador</span>
             </div>
@@ -197,7 +221,7 @@ const Menu: FunctionalComponent = () => {
       </nav>
 
       {/* Área principal donde se renderizan las rutas */}
-      <div className="main-content">
+      <main className="main-content"> {/* Use main tag for semantics */}
         <Router>
           <Route path="/" component={Dashboard} />
           <Route path="/cortes" component={Cortes} />
@@ -206,15 +230,23 @@ const Menu: FunctionalComponent = () => {
           <Route path="/kardex" component={Kardex} />
           <Route path="/articulos" component={Articulos} />
           <Route path="/existencias" component={Existencias} />
+          <Route path="/nomina" component={Nomina} />
           <Route path="/reportes" component={Reportes} />
-          <Route path="/ajustes" component={Ajustes} />
-          <Route path="/reportes/pedidos-inteligentes" component={PedidosInteligentes} />
+          {/* Added missing report routes based on menu links */}
           <Route path="/reportes/hoja-corte" component={HojaCorte} />
-          <Route path="/reportes/traspasos" component={Traspasos} />
+          <Route path="/reportes/inventario" component={/* Add Inventario component here if exists, e.g., Kardex or a new one */ Kardex} />
           <Route path="/reportes/facturas" component={Facturas} />
+          <Route path="/reportes/ajustes" component={/* Add Ajustes component here if exists, e.g., Ajustes or a new one */ Ajustes} />
+          <Route path="/reportes/traspasos" component={Traspasos} />
           <Route path="/reportes/negativos" component={Negativos} />
+          <Route path="/reportes/pedidos-inteligentes" component={PedidosInteligentes} />
+          {/* Main Ajustes page */}
+          <Route path="/ajustes" component={Ajustes} />
+
+           {/* Add a default route or 404 handler if needed */}
+           {/* <NotFound default /> */}
         </Router>
-      </div>
+      </main>
     </div>
   );
 }

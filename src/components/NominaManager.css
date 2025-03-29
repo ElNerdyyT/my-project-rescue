@@ -1,0 +1,298 @@
+/* NominaManager.css */
+
+.nomina-manager {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+}
+
+.nomina-manager h1,
+.nomina-manager h2 {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.controls {
+    margin-bottom: 20px;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.controls label {
+    font-weight: bold;
+}
+
+.controls input[type="date"] {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.controls button {
+    padding: 8px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.controls button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.controls button:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+.error-message {
+    color: red;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.loading-message {
+    font-style: italic;
+    color: #555;
+    text-align: center;
+    padding: 20px;
+}
+
+.payroll-table-container {
+    width: 100%;
+    overflow-x: auto; /* Permite scroll horizontal si la tabla es muy ancha */
+}
+
+.payroll-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px; /* Tamaño de fuente más pequeño como en la imagen */
+    margin-top: 15px;
+    table-layout: fixed; /* Ayuda a controlar anchos de columna */
+}
+
+.payroll-table th,
+.payroll-table td {
+    border: 1px solid #ccc;
+    padding: 4px 6px;
+    text-align: left;
+    vertical-align: middle; /* Alinear verticalmente al medio */
+    word-wrap: break-word; /* Evita que el texto largo desborde */
+}
+
+.payroll-table thead th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+    text-align: center;
+    vertical-align: middle; /* Centrar texto del encabezado */
+}
+
+/* Alineación y formato específicos */
+.payroll-table td.currency,
+.payroll-table th.currency {
+    text-align: right;
+}
+
+.payroll-table input[type="number"] {
+    border: 1px solid #ddd;
+    padding: 3px;
+    font-size: 11px;
+    -moz-appearance: textfield; /* Ocultar flechas en Firefox */
+    background-color: #fff; /* Fondo blanco para inputs */
+    max-width: 100%; /* Asegura que no exceda la celda */
+    box-sizing: border-box; /* Incluir padding/border en el ancho */
+}
+.payroll-table input[type="number"]::-webkit-outer-spin-button,
+.payroll-table input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none; /* Ocultar flechas en Chrome/Safari */
+    margin: 0;
+}
+
+.input-narrow {
+    width: 45px; /* Ancho para días y H.E. */
+    text-align: center;
+}
+.input-currency {
+     width: 70px; /* Ancho para montos editables */
+     text-align: right;
+}
+
+
+/* Estilos para filas de Sucursal y Totales */
+.branch-header td {
+    background-color: #e9ecef;
+    font-weight: bold;
+    text-align: center;
+    font-size: 12px;
+}
+
+.totals-row td {
+    font-weight: bold;
+    background-color: #f8f9fa;
+}
+.totals-row.branch-total td {
+    border-top: 2px solid #adb5bd; /* Línea superior más gruesa para total sucursal */
+}
+.totals-row.grand-total td {
+    border-top: 3px double #000; /* Doble línea para el gran total */
+    font-size: 12px;
+}
+
+
+/* Columna de Firma */
+.firma-col {
+    width: 120px; /* Ancho para la firma */
+    min-width: 100px;
+}
+
+/* Columnas de Totales */
+.total-col {
+    background-color: #e2e3e5; /* Fondo ligeramente distinto para totales */
+    font-weight: bold;
+}
+.net-pay-col {
+     font-weight: bold;
+}
+
+
+/* --- Estilos de Impresión --- */
+@media print {
+    body {
+        margin: 0;
+        font-size: 9pt; /* Tamaño de fuente más pequeño para impresión */
+         -webkit-print-color-adjust: exact !important; /* Fuerza impresión de colores de fondo en Chrome/Safari */
+         color-adjust: exact !important; /* Estándar */
+    }
+
+    .no-print {
+        display: none !important; /* Ocultar controles */
+    }
+
+    .nomina-manager {
+        margin: 1cm; /* Márgenes de página */
+    }
+
+    .payroll-table-container {
+        overflow-x: visible; /* No permitir scroll en impresión */
+    }
+
+    .payroll-table {
+        width: 100%;
+        font-size: 8pt; /* Aún más pequeño si es necesario */
+        table-layout: auto; /* Permitir que la tabla ajuste anchos */
+    }
+
+     .payroll-table th,
+    .payroll-table td {
+        padding: 2px 4px; /* Menos padding para impresión */
+        border: 1px solid #666; /* Bordes más visibles */
+    }
+
+     /* Mantener fondos para claridad visual, si la impresora lo permite */
+    .payroll-table thead th { background-color: #f2f2f2 !important; }
+    .branch-header td { background-color: #e9ecef !important; }
+    .totals-row td { background-color: #f8f9fa !important; }
+    .total-col { background-color: #e2e3e5 !important; }
+
+
+    .payroll-table input {
+        border: none; /* Ocultar bordes de input */
+        background-color: transparent !important; /* Fondo transparente */
+        font-size: inherit; /* Heredar tamaño de fuente */
+        text-align: inherit; /* Heredar alineación */
+        width: auto; /* Ancho automático */
+        padding: 0;
+        margin: 0;
+        -moz-appearance: none;
+        appearance: none;
+        display: inline; /* Mostrar como texto normal */
+    }
+
+    .firma-col {
+        border-bottom: 1px solid #000; /* Línea para firmar */
+        height: 30px; /* Espacio para firma */
+    }
+
+
+    /* Evitar saltos de página dentro de filas */
+    tr {
+        page-break-inside: avoid !important;
+    }
+     /* Intentar mantener grupos de sucursal juntos (puede no funcionar siempre) */
+     .branch-header {
+         page-break-before: auto;
+         page-break-after: avoid;
+     }
+     .totals-row.branch-total {
+          page-break-after: auto;
+     }
+/* Estilos para la sección de semanas guardadas */
+.saved-weeks-section {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+  }
+  
+  .saved-weeks-section h2 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.5rem;
+  }
+  
+  .weeks-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+  }
+  
+  .weeks-table th,
+  .weeks-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+  }
+  
+  .weeks-table th {
+    background-color: #f2f2f2;
+  }
+  
+  .weeks-table button {
+    margin-right: 5px;
+    padding: 4px 8px;
+    cursor: pointer;
+  }
+  
+  /* Separador visual */
+  hr {
+      border: 0;
+      height: 1px;
+      background: #ccc;
+      margin: 2rem 0;
+  }
+  
+  /* Estilos generales para botones y mensajes */
+  .card { /* Clase genérica para contenedores */
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  
+  .error-message {
+      color: red;
+      background-color: #ffebee;
+      border: 1px solid red;
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+  }
+  
+  .loading-message {
+      color: #333;
+      font-style: italic;
+  }
+  
+  /* ... (tus otros estilos existentes) ... */
+}

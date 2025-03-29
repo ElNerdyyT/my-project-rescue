@@ -1,136 +1,144 @@
-:root {
-  --date-range-bg: #ffffff;
-  --date-range-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  --date-range-radius: 12px;
-  --date-range-spacing: 1.5rem;
-  --primary-color: #3b82f6;
-  --primary-hover: #2563eb;
-  --error-color: #ef4444;
-  --disabled-color: #9ca3af;
-  --text-color: #374151;
-  --border-color: #e5e7eb;
-  --focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  --transition-speed: 0.2s;
-}
+/* --- START OF FILE DateRangeSelector.css --- */
 
-.date-range-container {
-  max-width: min(90%, 800px);
-  margin: 2rem auto;
-  padding: var(--date-range-spacing);
-  background: var(--date-range-bg);
-  border-radius: var(--date-range-radius);
-  box-shadow: var(--date-range-shadow);
-}
-
-.date-range-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
-  gap: var(--date-range-spacing);
-  margin-bottom: var(--date-range-spacing);
-}
-
-.date-input-container {
+/* Styles for the DateRangeSelector component, especially when inline */
+.date-range-selector-inline {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  align-items: center; /* Vertically align items */
+  gap: 0.5rem; /* Space between input groups and button */
+  background-color: transparent; /* Ensure no background interferes */
+  padding: 0; /* Remove padding */
+  border-radius: 4px; /* Optional: match other elements */
+  /* max-width: 450px; */ /* Optional: constrain max width */
+}
+
+.date-input-group {
+  display: flex;
+  align-items: center;
+  background-color: #fff; /* White background for inputs */
+  border: 1px solid #ced4da; /* Standard input border */
+  border-radius: 4px; /* Rounded corners */
+  padding: 0.1rem 0.3rem; /* Small padding inside the group */
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.date-input-group:focus-within { /* Highlight group when input is focused */
+  border-color: #86b7fe;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.date-icon {
+  font-size: 1rem; /* Adjust icon size */
+  color: #6c757d; /* Muted icon color */
+  margin-right: 0.3rem; /* Space between icon and input */
+  line-height: 1; /* Prevent extra space */
 }
 
 .date-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
-  color: var(--text-color);
+  /* Labels are visually hidden using sr-only class in the component now */
+  /* Keep this for potential future use if labels are shown again */
+   /* font-size: 0.8rem; */
+   /* color: #495057; */
+   /* margin-right: 0.3rem; */
+   /* white-space: nowrap; */
 }
 
 .date-input {
-  padding: 0.75rem;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: all var(--transition-speed) ease;
+  border: none; /* Remove individual input border, use group border */
+  padding: 0.2rem 0; /* Adjust vertical padding if needed, horizontal comes from group */
+  font-size: 0.85rem; /* Slightly smaller font */
+  background-color: transparent; /* Inherit background */
+  outline: none; /* Remove default outline, rely on group focus */
+  /* width: 110px; */ /* Fixed width can cause issues, let it flex or set max-width */
+  max-width: 120px; /* Limit width */
+  min-width: 100px; /* Ensure it doesn't get too small */
+  box-sizing: border-box;
+  height: auto; /* Let height be determined by content and padding */
+  line-height: normal; /* Reset line height */
 }
 
-.date-input:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: var(--focus-ring);
+/* Style for native date input clear/calendar buttons (browser specific) */
+.date-input::-webkit-calendar-picker-indicator {
+  background: none; /* Optional: hide default calendar icon if using own icon */
+  /* Or style it */
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
 }
-
-.date-input.invalid {
-  border-color: var(--error-color);
-}
-
-.error-message {
-  color: var(--error-color);
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
+.date-input::-webkit-clear-button {
+  /* Optional: style or hide */
   display: none;
 }
 
-.date-input.invalid + .error-message {
-  display: block;
+
+.date-input.invalid {
+  /* Apply invalid style to the group instead of just the input */
+  /* border-color: #dc3545; */ /* Error color */
 }
+.date-input-group:has(.date-input.invalid) { /* Use :has() for modern browsers */
+  border-color: #dc3545; /* Error color */
+}
+/* Fallback for browsers without :has() - less ideal */
+.date-input.invalid {
+   /* You might need a subtle indicator directly on the input if :has isn't supported */
+   /* e.g., box-shadow: inset 0 0 0 1px #dc3545; */
+}
+
+
+/* Hide error message spans visually when inline */
+.date-range-selector-inline .error-message {
+ display: none; /* Visually hide, but keep for screen readers via aria-live */
+}
+
 
 .update-button {
-  grid-column: 1 / -1;
-  display: flex;
-  justify-content: center;
+  display: inline-flex; /* Use inline-flex for icon+text alignment */
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background-color: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
+  justify-content: center;
+  padding: 0.3rem 0.6rem; /* Slightly smaller padding */
+  font-size: 0.85rem;
   font-weight: 500;
+  color: #fff;
+  background-color: #007bff; /* Primary button color */
+  border: 1px solid #007bff;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all var(--transition-speed) ease;
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+  white-space: nowrap; /* Prevent button text wrapping */
 }
 
-.update-button:disabled {
-  background-color: var(--disabled-color);
+.update-button .material-icons {
+  font-size: 1rem; /* Match date icon size */
+  /* margin-right: 0.3rem; */ /* Add space only if text is visible */
+  vertical-align: middle;
+}
+
+.update-button:hover {
+  background-color: #0056b3;
+  border-color: #0056b3;
+}
+
+.update-button:disabled,
+.update-button[aria-disabled="true"] {
+  background-color: #6c757d; /* Disabled color */
+  border-color: #6c757d;
+  opacity: 0.65;
   cursor: not-allowed;
 }
 
-.update-button:hover:not(:disabled) {
-  background-color: var(--primary-hover);
-}
+/* Alert component styling might need to be adjusted separately */
+/* Ensure it doesn't interfere with the top bar layout */
+/* e.g., make it position: fixed or absolute relative to viewport/body */
 
-.material-icons {
-  font-size: 1.25rem;
-}
 
-@media (max-width: 768px) {
-  .date-range-container {
-    margin: 1rem;
-    padding: 1rem;
-    border-radius: 8px;
-  }
-  
-  .date-range-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-
-  .update-button {
-    padding: 0.75rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .date-range-container {
-    margin: 0.5rem;
-    padding: 0.75rem;
-  }
-  
-  .date-input {
-    padding: 0.5rem;
-    font-size: 0.875rem;
-  }
-  
-  .update-button {
-    font-size: 0.875rem;
-  }
+/* Utility class for screen-reader only text (copied from Menu.css for completeness if needed) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
