@@ -31,12 +31,7 @@ h2 {
 }
 
 /* Remove flexbox styling for individual items */
-.filter-item {
-  /* display: flex; */ /* REMOVED */
-  /* flex-direction: column; */ /* REMOVED */
-  /* gap: 5px; */ /* REMOVED */
-  /* Styles for elements INSIDE the column will apply */
-}
+
 
 /* Styling for labels within the filter controls (now using Bootstrap grid) */
 .filter-controls .form-label {
@@ -66,14 +61,6 @@ h2 {
 }
 
 /* Keep search input specific width if needed, but Bootstrap cols often manage width */
-.filter-controls input[type="search"] {
-   /* min-width: 200px; */ /* Optional: Can keep or let column width dictate */
-}
-
-/* Remove rule pushing search right using margin - handled by Bootstrap ms-auto on col */
-.filter-item-search {
-  /* margin-left: auto; */ /* REMOVED */
-}
 
 
 /* Keep focus styles */

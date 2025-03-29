@@ -50,15 +50,6 @@ interface VentasCardsProps {
 
 
 // List of ALL branches (still needed for individual branch logic)
-const allBranches = [
-  'KardexEcono1',
-  'KardexMexico',
-  'KardexMadero',
-  'KardexLopezM',
-  'KardexBaja',
-  'KardexEcono2',
-  'KardexLolita'
-];
 
 // Helper function to safely parse and round numbers
 const safeParseFloatAndRound = (value: any, decimals: number = 2): number => {
@@ -159,7 +150,7 @@ const VentasCardsReport = ({ startDate, endDate, selectedBranch, operatingExpens
     // Basic validation: Only run if valid dates from props are set
     if (!startDate || !endDate || !startDate.includes('-') || !endDate.includes('-')) {
         console.log("VentasCardsReport: Waiting for valid dates from props...");
-        setData(prev => ({
+        setData(() => ({
             // Reset all data fields
             totalProductosVendidos: 0, totalCostoGeneral: 0, totalPrecioPublico: 0,
             totalDescuentoGeneral: 0, utilidadBruta: 0, isLoading: false,

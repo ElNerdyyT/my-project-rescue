@@ -187,7 +187,6 @@ const TraspasosSuc = () => {
           const mapKey = `${folKey}_${articuloKey}_${destino}`; // Look for entry in the derived destination
           const entradaData = incomingMap.get(mapKey);
           const cantidadEntrada = entradaData?.cantidad || 0;
-          const costoEntrada = entradaData?.costo || 0; // Cost recorded at destination
           const valorRecibido = cantidadEntrada * costoSalida; // Calculate received value using ORIGIN cost for fair comparison
 
           totalRecibido += valorRecibido;

@@ -48,8 +48,8 @@ const DataTableVentas = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage] = useState(25);
   const [totalPages, setTotalPages] = useState<number>(1);
-  const [displayStartDate, setDisplayStartDate] = useState<string>(''); // For display in titles
-  const [displayEndDate, setDisplayEndDate] = useState<string>('');     // For display in titles
+  const [, setDisplayStartDate] = useState<string>(''); // For display in titles
+  const [, setDisplayEndDate] = useState<string>('');     // For display in titles
   const [appliedStartDate, setAppliedStartDate] = useState<string>(''); // Used for fetching/calculations
   const [appliedEndDate, setAppliedEndDate] = useState<string>('');     // Used for fetching/calculations
   const initialDate = new Date();
