@@ -2,10 +2,6 @@ import { FunctionalComponent } from 'preact';
 import PageLayout from '../components/PageLayout';
 import CardsCortes from '../components/CardsCortes';
 import ChartCortes from '../components/ChartCortes';
-import ChartEfectivo from '../components/ChartEfectivo';
-import ChartTarjeta from '../components/ChartTarjeta';;
-import ChartEfectivoVsTarjetaSucursal from '../components/ChartEfectivoVsTarjetaSucursal';
-
 
 const Dashboard: FunctionalComponent = () => {
   return (
