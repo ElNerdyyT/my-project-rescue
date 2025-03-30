@@ -14,9 +14,6 @@ const Dashboard: FunctionalComponent = () => {
       description="Bienvenido al panel principal. Aquí puedes ver un resumen de los cortes."
     >
       <ChartCortes />
-      <ChartEfectivoVsTarjetaSucursal />
-      <ChartEfectivo /> {/* Cash only */}
-      <ChartTarjeta />  {/* Card only */}
       <CardsCortes />
     </PageLayout>
   );
