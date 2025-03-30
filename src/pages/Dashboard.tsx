@@ -17,10 +17,6 @@ const Dashboard: FunctionalComponent = () => {
       <ChartEfectivoVsTarjetaSucursal />
       <ChartEfectivo /> {/* Cash only */}
       <ChartTarjeta />  {/* Card only */}
-      //<ChartFaltante /> {/* Shortages */}
-      //<ChartSobrante /> {/* Overages */}
-      //<ChartGastos />   {/* Expenses */}
-      //<ChartCompras />  {/* Purchases */}
       <CardsCortes />
     </PageLayout>
   );
