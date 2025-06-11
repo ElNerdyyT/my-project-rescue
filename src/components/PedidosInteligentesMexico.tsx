@@ -32,6 +32,7 @@ const SUCURSALES = [
   { value: 'Econo1', label: 'Econo' },
   { value: 'Mexico', label: 'Mexico' },
   { value: 'Madero', label: 'Madero' }
+  { value: 'Econo2', label: 'Econo2' }
 ];
 
 const PedidosInteligentes = () => {
