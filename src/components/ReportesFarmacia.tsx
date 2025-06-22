@@ -3,6 +3,8 @@ import { useState } from 'preact/hooks';
 import VentasReport from './VentasReport';
 import GastosAdmin from './GastosAdmin';
 import NominaManager from './NominaManager';
+import Utilidadxdepto from './Utilidadxdepto';
+
 
 const ReportesFarmacia: FunctionalComponent = () => {
   const [activeTab, setActiveTab] = useState<string>('Ventas'); // Estado para la pestaña activa
@@ -92,7 +94,7 @@ const ReportesFarmacia: FunctionalComponent = () => {
       {/* Mostrar el contenido de la pestaña activa */}
       <div class="tab-content mt-3">
         {activeTab === 'Ventas' && <div>Contenido de Ventas <VentasReport /></div>}
-        {activeTab === 'Utilidad' && <div>Contenido de Utilidad</div>}
+        {activeTab === 'Utilidad' && <div>Contenido de Ventas <Utilidadxdepto /></div>}
         {activeTab === 'Gastos' && <div>Contenido de Gastos <GastosAdmin /></div>}
         {activeTab === 'Pedidos' && <div>Contenido de Pedidos</div>}
         {activeTab === 'Facturas' && <div>Contenido de Facturas</div>}
