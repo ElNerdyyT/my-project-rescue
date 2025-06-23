@@ -28,7 +28,7 @@ interface ProgresoGuardado {
     reportesFinalizados: [string, Articulo[]][];
 }
 
-// --- Configuraciones y Funciones de Carga (sin cambios) ---
+// --- Configuraciones y Funciones de Carga ---
 const sucursalesConfig: { [key: string]: string } = {
     'Mexico': 'ArticulosMexico', 'Econo1': 'ArticulosEcono1', 'Baja': 'ArticulosBaja',
     'Sucursal4': 'ArticulosSucursal4', 'Sucursal5': 'ArticulosSucursal5',
@@ -86,7 +86,7 @@ const InventarioSuc = () => {
     const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
     const [loadingError, setLoadingError] = useState<string | null>(null);
     const [codigoInput, setCodigoInput] = useState<string>('');
-    const [errorScanner, setErrorScanner] = useState<string | null>(null); // El estado se define aquí
+    const [errorScanner, setErrorScanner] = useState<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -151,11 +151,10 @@ const InventarioSuc = () => {
         let items = allBranchItems.filter(item => item.departamento === selectedDept && item.subdepartamento === selectedSubDept);
         return items.filter(item => item.stockSistema !== 0 || item.stockFisico !== 0).sort((a, b) => a.nombre.localeCompare(b.nombre));
     }, [allBranchItems, selectedDept, selectedSubDept]);
-    
-    // --- Lógica de Procesamiento de Escaneo (CORREGIDA) ---
+
     const procesarCodigo = (codigo: string) => {
         if (!codigo) return;
-        setErrorScanner(null); // Usar la función setter aquí
+        setErrorScanner(null);
         const globalArticuloIndex = allBranchItems.findIndex(a => a.id === codigo);
         if (globalArticuloIndex !== -1) {
             const articuloEnSistema = allBranchItems[globalArticuloIndex];
@@ -169,7 +168,6 @@ const InventarioSuc = () => {
                 const esSubdeptoIncorrecto = selectedSubDept !== TODOS_SUBDEPTOS && articuloEnSistema.subdepartamento !== selectedSubDept;
                 if (selectedDept !== TODOS_DEPTOS && (esDeptoIncorrecto || esSubdeptoIncorrecto)) {
                     const ubicacionReal = `Depto: ${articuloEnSistema.departamento} / Subd: ${articuloEnSistema.subdepartamento}`;
-                    // --- ESTA ES LA LÍNEA CORREGIDA ---
                     setErrorScanner(`Artículo ${codigo} (${articuloEnSistema.nombre}) pertenece a: ${ubicacionReal}.`);
                     const ubicacionEsperada = `Depto: ${selectedDept}${selectedSubDept !== TODOS_SUBDEPTOS ? ' / Subd: ' + selectedSubDept : ''}`;
                     setMisplacedItems(prev => new Map(prev).set(codigo, { ...artActualizado, ubicacionEsperada }));
@@ -186,14 +184,13 @@ const InventarioSuc = () => {
                 return nuevosAllItems;
             });
         } else {
-            // --- ESTA ES LA OTRA LÍNEA CORREGIDA ---
             setErrorScanner(`Código ${codigo} NO encontrado en esta sucursal.`);
             setNotFoundScannedItems(prev => new Map(prev).set(codigo, { count: (prev.get(codigo)?.count || 0) + 1 }));
         }
         setCodigoInput('');
         if (inputRef.current) { inputRef.current.value = ''; inputRef.current.focus(); }
     };
-    
+
     const finalizarYGenerarPdfSubdepto = () => {
         setIsGeneratingPdf(true);
         const subDeptKey = `${selectedDept}-${selectedSubDept}`;
@@ -222,6 +219,7 @@ const InventarioSuc = () => {
         setSelectedSubDept(TODOS_SUBDEPTOS);
     };
 
+    // --- MODIFICADO: Genera el PDF final consolidado CON TABLAS DE EXCEPCIONES ---
     const generarPdfFinalConsolidado = () => {
          if (reportesFinalizados.size === 0) {
             alert("No hay subdepartamentos finalizados para generar un reporte consolidado.");
@@ -233,7 +231,9 @@ const InventarioSuc = () => {
         doc.text(`Reporte Final Consolidado - ${sucursalSeleccionada}`, 14, 22);
         doc.setFontSize(11);
         doc.text(`Generado: ${new Date().toLocaleString()}`, 14, 30);
+        
         let finalY = 35;
+
         for (const [key, articulos] of reportesFinalizados.entries()) {
             const articulosConDiferencia = articulos.filter(a => a.diferencia !== 0);
             if (articulosConDiferencia.length === 0) continue;
@@ -251,6 +251,43 @@ const InventarioSuc = () => {
             // @ts-ignore
             finalY = doc.lastAutoTable.finalY;
         }
+
+        // --- INICIO DE LA LÓGICA AÑADIDA ---
+        // Agregar tabla de Artículos Mal Ubicados al final del reporte consolidado
+        if (misplacedItems.size > 0) {
+            const misplacedOrdenado = Array.from(misplacedItems.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
+            const startY = finalY > 250 ? 20 : finalY + 15;
+            if (startY === 20) doc.addPage();
+            doc.setFontSize(14);
+            doc.text("Resumen de Artículos Mal Ubicados (Toda la Sesión)", 14, startY);
+            autoTable(doc, {
+                startY: startY + 5,
+                head: [['Código', 'Nombre', 'Ubicación Esperada', 'Ubicación Real']],
+                body: misplacedOrdenado.map(a => [a.id, a.nombre, a.ubicacionEsperada, `Depto: ${a.departamento} / Subd: ${a.subdepartamento}`]),
+                headStyles: { fillColor: [243, 156, 18] },
+                styles: { fontSize: 8 },
+            });
+            // @ts-ignore
+            finalY = doc.lastAutoTable.finalY;
+        }
+
+        // Agregar tabla de Códigos No Encontrados al final del reporte consolidado
+        if (notFoundScannedItems.size > 0) {
+            const notFoundOrdenado = Array.from(notFoundScannedItems.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+            const startY = finalY > 250 ? 20 : finalY + 15;
+            if (startY === 20) doc.addPage();
+            doc.setFontSize(14);
+            doc.text("Resumen de Códigos No Encontrados (Toda la Sesión)", 14, startY);
+            autoTable(doc, {
+                startY: startY + 5,
+                head: [['Código No Encontrado', 'Veces Escaneado']],
+                body: notFoundOrdenado.map(([id, data]) => [id, data.count]),
+                headStyles: { fillColor: [192, 57, 43] },
+                styles: { fontSize: 8 },
+            });
+        }
+        // --- FIN DE LA LÓGICA AÑADIDA ---
+
         doc.save(`Reporte_Consolidado_Final_${sucursalSeleccionada}.pdf`);
         setIsGeneratingPdf(false);
     };
