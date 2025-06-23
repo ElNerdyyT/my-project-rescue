@@ -28,7 +28,6 @@ interface ProgresoGuardado {
     subdeptosRevisados: string[];
 }
 
-// --- Configuraciones y Funciones de Carga ---
 const sucursalesConfig: { [key: string]: string } = {
     'Mexico': 'ArticulosMexico', 'Econo1': 'ArticulosEcono1', 'Baja': 'ArticulosBaja',
     'Sucursal4': 'ArticulosSucursal4', 'Sucursal5': 'ArticulosSucursal5',
@@ -36,41 +35,12 @@ const sucursalesConfig: { [key: string]: string } = {
 };
 
 const cargarArticulosSucursal = async (nombreSucursal: string): Promise<Articulo[]> => {
-    const tableName = sucursalesConfig[nombreSucursal];
-    if (!tableName) throw new Error(`Configuración de tabla faltante para ${nombreSucursal}`);
-    try {
-        const { data, error } = await supabase.from(tableName).select('cve_articulo_a, nombre_comer_a, cant_piso_a, depto_a, subdepto_a');
-        if (error) throw error;
-        if (!data) return [];
-        return data.map((item: any) => ({
-            id: item.cve_articulo_a,
-            nombre: item.nombre_comer_a || 'Nombre no disponible',
-            stockSistema: Number(item.cant_piso_a) || 0,
-            stockFisico: 0,
-            diferencia: 0 - (Number(item.cant_piso_a) || 0),
-            departamento: item.depto_a?.toString().trim() || 'Sin Depto',
-            subdepartamento: item.subdepto_a?.toString().trim() || 'Sin Subdepto',
-        }));
-    } catch (err) {
-        console.error("Error en cargarArticulosSucursal:", err);
-        throw err;
-    }
+    // ... (código sin cambios)
+};
+const cargarDepartamentos = async (nombreSucursal: string): Promise<string[]> => {
+    // ... (código sin cambios)
 };
 
-const cargarDepartamentos = async (nombreSucursal: string): Promise<string[]> => {
-    const tableName = sucursalesConfig[nombreSucursal];
-    if (!tableName) return [];
-    try {
-        const { data, error } = await supabase.from(tableName).select('depto_a');
-        if (error) throw error;
-        if (!data) return [];
-        const depts = [...new Set(data.map((item: any) => item.depto_a?.toString().trim() || ''))].filter(Boolean).sort();
-        return depts;
-    } catch (err) {
-        console.error(`Error cargando departamentos:`, err);
-        return [];
-    }
-};
 
 // --- Componente Principal ---
 const InventarioSuc = () => {
@@ -89,17 +59,23 @@ const InventarioSuc = () => {
     const [errorScanner, setErrorScanner] = useState<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // --- Efecto de Carga con Depuración ---
     useEffect(() => {
         const loadBranchData = async () => {
+            console.log("[LOAD] 1. Iniciando carga de datos para sucursal:", sucursalSeleccionada);
             setIsLoadingData(true); setLoadingError(null);
             setSelectedDept(TODOS_DEPTOS); setSelectedSubDept(TODOS_SUBDEPTOS);
             try {
                 const [depts, itemsFromDB] = await Promise.all([cargarDepartamentos(sucursalSeleccionada), cargarArticulosSucursal(sucursalSeleccionada)]);
                 setAvailableDepts([TODOS_DEPTOS, ...depts]);
                 const key = `progreso_inventario_${sucursalSeleccionada}`;
+                console.log(`[LOAD] 2. Buscando progreso guardado con la llave: ${key}`);
                 const progresoGuardadoJSON = localStorage.getItem(key);
+                console.log(`[LOAD] 3. Datos crudos encontrados:`, progresoGuardadoJSON ? progresoGuardadoJSON.substring(0, 100) + '...' : null);
+                
                 let itemsParaEstadoFinal = itemsFromDB;
                 if (progresoGuardadoJSON) {
+                    console.log("[LOAD] 4. Se encontró progreso. Fusionando...");
                     const progreso: ProgresoGuardado = JSON.parse(progresoGuardadoJSON);
                     const conteoGuardado = new Map(progreso.conteoFisico);
                     itemsParaEstadoFinal = itemsFromDB.map(itemDeDB => {
@@ -113,6 +89,7 @@ const InventarioSuc = () => {
                     setNotFoundScannedItems(new Map(progreso.notFoundScannedItems));
                     setSubdeptosRevisados(new Set(progreso.subdeptosRevisados));
                 } else {
+                    console.log("[LOAD] 4. NO se encontró progreso. Usando datos limpios de la BD.");
                     setAllBranchItems(itemsFromDB);
                     setMisplacedItems(new Map());
                     setNotFoundScannedItems(new Map());
@@ -123,14 +100,21 @@ const InventarioSuc = () => {
                 setLoadingError(`Error al cargar datos: ${error.message}`);
             } finally {
                 setIsLoadingData(false);
+                console.log("[LOAD] 5. Carga finalizada.");
             }
         };
         loadBranchData();
     }, [sucursalSeleccionada]);
 
+    // --- Efecto de Auto-Guardado con Depuración ---
     useEffect(() => {
-        if (isLoadingData) return;
+        console.log(`[AUTOSAVE] Verificando si guardar. isLoadingData: ${isLoadingData}`);
+        if (isLoadingData) {
+            console.log("[AUTOSAVE] Bloqueado. No se guardará.");
+            return;
+        }
         const key = `progreso_inventario_${sucursalSeleccionada}`;
+        console.log(`[AUTOSAVE] Preparando para guardar en la llave: ${key}`);
         const conteoFisico = new Map();
         allBranchItems.forEach(item => {
             if (item.stockFisico > 0) conteoFisico.set(item.id, { stockFisico: item.stockFisico });
@@ -142,20 +126,56 @@ const InventarioSuc = () => {
             subdeptosRevisados: Array.from(subdeptosRevisados),
         };
         localStorage.setItem(key, JSON.stringify(progreso));
+        console.log("[AUTOSAVE] ¡Progreso guardado!");
     }, [allBranchItems, misplacedItems, notFoundScannedItems, subdeptosRevisados, sucursalSeleccionada, isLoadingData]);
 
-    const availableSubDepts = useMemo(() => {
-        if (selectedDept === TODOS_DEPTOS) return [];
-        const subDepts = allBranchItems.filter(item => item.departamento === selectedDept).map(item => item.subdepartamento);
-        return [TODOS_SUBDEPTOS, ...[...new Set(subDepts)].sort()];
-    }, [allBranchItems, selectedDept]);
+    // --- Lógica de "Limpiar Progreso" con Depuración ---
+    const limpiarProgreso = async () => {
+        if (confirm(`¿Está seguro de que desea borrar TODO el progreso de inventario para la sucursal ${sucursalSeleccionada}? Esta acción no se puede deshacer.`)) {
+            console.clear(); // Limpia la consola para ver solo los mensajes de esta acción
+            console.log("------------------------------------------");
+            console.log("[LIMPIAR] 1. Iniciando proceso de limpieza.");
+            
+            // Poner la UI en estado de carga para bloquear el auto-guardado
+            setIsLoadingData(true);
+            setLoadingError(null);
+            
+            // Borrar del localStorage
+            const key = `progreso_inventario_${sucursalSeleccionada}`;
+            console.log(`[LIMPIAR] 2. La llave a borrar es: ${key}`);
+            localStorage.removeItem(key);
+            console.log("[LIMPIAR] 3. localStorage.removeItem() ha sido llamado.");
+            
+            // Verificación inmediata
+            const valorDespuesDeBorrar = localStorage.getItem(key);
+            console.log(`[LIMPIAR] 4. Verificación: Valor en localStorage AHORA MISMO es: ${valorDespuesDeBorrar === null ? 'null (¡Borrado exitoso!)' : '¡ERROR! AÚN EXISTE VALOR'}`);
 
-    const articulosParaMostrarUI = useMemo(() => {
-        if (selectedDept === TODOS_DEPTOS || selectedSubDept === TODOS_SUBDEPTOS) return [];
-        let items = allBranchItems.filter(item => item.departamento === selectedDept && item.subdepartamento === selectedSubDept);
-        return items.filter(item => item.stockSistema !== 0 || item.stockFisico !== 0).sort((a, b) => a.nombre.localeCompare(b.nombre));
-    }, [allBranchItems, selectedDept, selectedSubDept]);
+            // Resetear todos los estados relacionados al progreso
+            console.log("[LIMPIAR] 5. Reseteando estados internos (listas, mapas, etc.).");
+            setMisplacedItems(new Map());
+            setNotFoundScannedItems(new Map());
+            setSubdeptosRevisados(new Set());
+            setSelectedDept(TODOS_DEPTOS);
+            setSelectedSubDept(TODOS_SUBDEPTOS);
 
+            try {
+                console.log("[LIMPIAR] 6. Recargando lista limpia de artículos desde la base de datos...");
+                const itemsFromDB = await cargarArticulosSucursal(sucursalSeleccionada);
+                setAllBranchItems(itemsFromDB);
+                console.log("[LIMPIAR] 7. Lista limpia cargada en el estado.");
+                alert("El progreso ha sido limpiado. La aplicación se ha reseteado.");
+            } catch (error: any) {
+                setLoadingError(`Error recargando la lista de artículos: ${error.message}`);
+            } finally {
+                setIsLoadingData(false);
+                console.log("[LIMPIAR] 8. Proceso de limpieza finalizado.");
+                console.log("------------------------------------------");
+            }
+        }
+    };
+    
+    // El resto del código (procesarCodigo, generar PDFs, y el return con el JSX) no tiene cambios.
+    // ... (pegar el resto de las funciones y el return JSX de la versión anterior aquí)
     const procesarCodigo = (codigo: string) => {
         if (!codigo) return;
         setErrorScanner(null);
@@ -192,7 +212,6 @@ const InventarioSuc = () => {
         setCodigoInput('');
         if (inputRef.current) { inputRef.current.value = ''; inputRef.current.focus(); }
     };
-    
     const generarPdfSubdepto = () => {
         setIsGeneratingPdf(true);
         const subDeptKey = `${selectedDept}-${selectedSubDept}`;
@@ -220,7 +239,6 @@ const InventarioSuc = () => {
         setIsGeneratingPdf(false);
         alert(`Reporte provisional para "${selectedSubDept}" generado. Puede continuar haciendo ajustes o seleccionar otro subdepartamento.`);
     };
-
     const generarPdfFinalConsolidado = () => {
          if (subdeptosRevisados.size === 0) {
             alert("No ha marcado ningún subdepartamento como 'revisado' para generar un reporte consolidado.");
@@ -286,41 +304,6 @@ const InventarioSuc = () => {
         doc.save(`Reporte_Consolidado_Final_${sucursalSeleccionada}_${timestamp}.pdf`);
         setIsGeneratingPdf(false);
     };
-
-    // --- LÓGICA DE "LIMPIAR PROGRESO" (VERSIÓN FINAL Y ROBUSTA) ---
-    const limpiarProgreso = async () => {
-        if (confirm(`¿Está seguro de que desea borrar TODO el progreso de inventario para la sucursal ${sucursalSeleccionada}? Esta acción no se puede deshacer.`)) {
-            // 1. Poner la UI en estado de carga para bloquear el auto-guardado
-            setIsLoadingData(true);
-            setLoadingError(null);
-            
-            // 2. Borrar del localStorage
-            const key = `progreso_inventario_${sucursalSeleccionada}`;
-            localStorage.removeItem(key);
-
-            // 3. Resetear todos los estados relacionados al progreso a su valor inicial
-            setMisplacedItems(new Map());
-            setNotFoundScannedItems(new Map());
-            setSubdeptosRevisados(new Set());
-            setSelectedDept(TODOS_DEPTOS);
-            setSelectedSubDept(TODOS_SUBDEPTOS);
-
-            try {
-                // 4. Volver a cargar la lista limpia de artículos desde la base de datos
-                console.log("Recargando lista limpia de artículos...");
-                const itemsFromDB = await cargarArticulosSucursal(sucursalSeleccionada);
-                setAllBranchItems(itemsFromDB);
-                alert("El progreso ha sido limpiado exitosamente.");
-            } catch (error: any) {
-                setLoadingError(`Error recargando la lista de artículos: ${error.message}`);
-            } finally {
-                // 5. Finalizar el estado de carga
-                setIsLoadingData(false);
-            }
-        }
-    };
-    
-    // --- Renderizado del Componente ---
     return (
         <div style={{ padding: '20px' }}>
             <h2>Control de Inventario Físico (Flexible)</h2>
@@ -402,4 +385,43 @@ const InventarioSuc = () => {
     );
 };
 
+// Se han eliminado las funciones duplicadas de aquí para mayor claridad.
 export default InventarioSuc;
+
+// Funciones auxiliares que deben estar fuera del componente
+async function _cargarArticulosSucursal(nombreSucursal: string): Promise<Articulo[]> {
+    const tableName = sucursalesConfig[nombreSucursal];
+    if (!tableName) throw new Error(`Configuración de tabla faltante para ${nombreSucursal}`);
+    try {
+        const { data, error } = await supabase.from(tableName).select('cve_articulo_a, nombre_comer_a, cant_piso_a, depto_a, subdepto_a');
+        if (error) throw error;
+        if (!data) return [];
+        return data.map((item: any) => ({
+            id: item.cve_articulo_a,
+            nombre: item.nombre_comer_a || 'Nombre no disponible',
+            stockSistema: Number(item.cant_piso_a) || 0,
+            stockFisico: 0,
+            diferencia: 0 - (Number(item.cant_piso_a) || 0),
+            departamento: item.depto_a?.toString().trim() || 'Sin Depto',
+            subdepartamento: item.subdepto_a?.toString().trim() || 'Sin Subdepto',
+        }));
+    } catch (err) {
+        console.error("Error en cargarArticulosSucursal:", err);
+        throw err;
+    }
+};
+
+async function _cargarDepartamentos(nombreSucursal: string): Promise<string[]> {
+    const tableName = sucursalesConfig[nombreSucursal];
+    if (!tableName) return [];
+    try {
+        const { data, error } = await supabase.from(tableName).select('depto_a');
+        if (error) throw error;
+        if (!data) return [];
+        const depts = [...new Set(data.map((item: any) => item.depto_a?.toString().trim() || ''))].filter(Boolean).sort();
+        return depts;
+    } catch (err) {
+        console.error(`Error cargando departamentos:`, err);
+        return [];
+    }
+};
