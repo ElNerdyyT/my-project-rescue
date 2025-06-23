@@ -18,7 +18,6 @@ interface Articulo {
     subdepartamento: string;
 }
 
-// MODIFICADO: Ahora guarda la ubicación completa esperada
 interface MisplacedArticulo extends Articulo {
     ubicacionEsperada: string;
 }
@@ -161,7 +160,6 @@ const InventarioSuc = () => {
         return items;
     }, [allBranchItems, selectedDept, selectedSubDept]);
 
-    // --- MODIFICADO: Lógica para detectar artículos mal ubicados ---
     const procesarCodigo = (codigo: string) => {
         if (!codigo) return;
         setErrorScanner(null);
@@ -176,11 +174,9 @@ const InventarioSuc = () => {
                 artActualizado.diferencia = artActualizado.stockFisico - artActualizado.stockSistema;
                 nuevosAllItems[globalArticuloIndex] = artActualizado;
 
-                // --- INICIO DE LA LÓGICA MEJORADA ---
                 const esDeptoIncorrecto = articuloEnSistema.departamento !== selectedDept;
                 const esSubdeptoIncorrecto = selectedSubDept !== TODOS_SUBDEPTOS && articuloEnSistema.subdepartamento !== selectedSubDept;
                 
-                // Un artículo está mal ubicado si se ha seleccionado un departamento Y el depto o subdepto no coinciden.
                 if (selectedDept !== TODOS_DEPTOS && (esDeptoIncorrecto || esSubdeptoIncorrecto)) {
                     const ubicacionReal = `Depto: ${articuloEnSistema.departamento} / Subd: ${articuloEnSistema.subdepartamento}`;
                     setErrorScanner(`Artículo ${codigo} (${articuloEnSistema.nombre}) pertenece a: ${ubicacionReal}.`);
@@ -188,7 +184,6 @@ const InventarioSuc = () => {
                     const ubicacionEsperada = `Depto: ${selectedDept}${selectedSubDept !== TODOS_SUBDEPTOS ? ' / Subd: ' + selectedSubDept : ''}`;
                     setMisplacedItems(prev => new Map(prev).set(codigo, { ...artActualizado, ubicacionEsperada }));
                 } else {
-                    // Si el artículo está en la ubicación correcta ahora, lo removemos de la lista de mal ubicados
                     setMisplacedItems(prev => {
                         if (prev.has(codigo)) {
                             const nuevos = new Map(prev);
@@ -198,7 +193,6 @@ const InventarioSuc = () => {
                         return prev;
                     });
                 }
-                // --- FIN DE LA LÓGICA MEJORADA ---
                 
                 return nuevosAllItems;
             });
@@ -239,7 +233,6 @@ const InventarioSuc = () => {
         }
     };
 
-    // --- MODIFICADO: Generación de PDF para reflejar la nueva estructura de mal ubicados ---
     const generarReportePDF = () => {
         setIsGeneratingPdf(true);
         try {
@@ -274,12 +267,12 @@ const InventarioSuc = () => {
                 autoTable(doc, {
                     // @ts-ignore
                     startY: doc.lastAutoTable.finalY + 10,
-                    head: [['Código', 'Nombre', 'Ubicación Esperada', 'Ubicación Real']], // <-- Header modificado
+                    head: [['Código', 'Nombre', 'Ubicación Esperada', 'Ubicación Real']],
                     body: misplacedOrdenado.map(a => [
                         a.id,
                         a.nombre,
-                        a.ubicacionEsperada, // <-- Nuevo campo
-                        `Depto: ${a.departamento} / Subd: ${a.subdepartamento}` // <-- Ubicación real detallada
+                        a.ubicacionEsperada,
+                        `Depto: ${a.departamento} / Subd: ${a.subdepartamento}`
                     ]),
                     headStyles: { fillColor: [243, 156, 18] },
                     styles: { fontSize: 8 },
@@ -343,6 +336,7 @@ const InventarioSuc = () => {
 
             <div style={{ margin: '20px 0' }}>
                 <label htmlFor="barcode-input">Escanear Código:</label>
+                {/* --- INICIO DE LA MODIFICACIÓN --- */}
                 <input
                     ref={inputRef}
                     type="text"
@@ -351,13 +345,13 @@ const InventarioSuc = () => {
                     onInput={(e) => setCodigoInput(e.currentTarget.value)}
                     onKeyDown={handleScanOnEnter}
                     placeholder={isLoadingData ? "Cargando..." : "Esperando escaneo (Enter)"}
-                    disabled={isLoadingData || !!loadingError || isGeneratingPdf || (selectedDept !== TODOS_DEPTOS && selectedSubDept === TODOS_SUBDEPTOS)}
+                    // Se ha eliminado la condición que deshabilitaba el input incorrectamente
+                    disabled={isLoadingData || !!loadingError || isGeneratingPdf}
                     style={{ marginLeft: '10px', padding: '8px', minWidth: '300px' }}
                 />
                 {errorScanner && <p style={{ color: 'orange', marginTop: '5px' }}>{errorScanner}</p>}
-                {selectedDept !== TODOS_DEPTOS && selectedSubDept === TODOS_SUBDEPTOS && !isLoadingData &&
-                    <p style={{ color: 'blue', marginTop: '5px' }}>Por favor, seleccione un subdepartamento para comenzar a escanear.</p>
-                }
+                {/* Se ha eliminado el párrafo que mostraba el mensaje incorrecto */}
+                {/* --- FIN DE LA MODIFICACIÓN --- */}
             </div>
 
             {(isLoadingData || isLoadingDepts) && <p>Cargando datos y progreso...</p>}
