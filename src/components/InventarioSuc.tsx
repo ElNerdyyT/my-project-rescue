@@ -212,7 +212,8 @@ const InventarioSuc = () => {
         } else {
              autoTable(doc, { startY: 45, body: [['No se encontraron diferencias en este subdepartamento.']] });
         }
-        doc.save(`Reporte_${sucursalSeleccionada}_${selectedDept}_${selectedSubDept}.pdf`);
+        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-'); // Crea un formato YYYY-MM-DD_HH-mm-ss
+        doc.save(`Reporte_${sucursalSeleccionada}_${selectedDept}_${selectedSubDept}_${timestamp}.pdf`);
         setReportesFinalizados(prev => new Map(prev).set(subDeptKey, articulosDelSubdepto));
         setIsGeneratingPdf(false);
         alert(`Reporte para "${selectedSubDept}" generado y guardado. Por favor, seleccione otro subdepartamento.`);
@@ -288,7 +289,8 @@ const InventarioSuc = () => {
         }
         // --- FIN DE LA LÓGICA AÑADIDA ---
 
-        doc.save(`Reporte_Consolidado_Final_${sucursalSeleccionada}.pdf`);
+        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-'); // Crea un formato YYYY-MM-DD_HH-mm-ss
+        doc.save(`Reporte_Consolidado_Final_${sucursalSeleccionada}_${timestamp}.pdf`);
         setIsGeneratingPdf(false);
     };
 
