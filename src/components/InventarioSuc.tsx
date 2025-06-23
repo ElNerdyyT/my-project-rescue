@@ -23,7 +23,8 @@ interface MisplacedArticulo extends Articulo {
 }
 
 interface ProgresoGuardado {
-    allBranchItems: Articulo[];
+    // Solo guardamos el ID y el conteo físico para fusionar
+    conteoFisico: [string, { stockFisico: number }][];
     misplacedItems: [string, MisplacedArticulo][];
     notFoundScannedItems: [string, { count: number }][];
 }
@@ -85,23 +86,35 @@ const InventarioSuc = () => {
     const [errorScanner, setErrorScanner] = useState<string | null>(null);
     const [misplacedItems, setMisplacedItems] = useState<Map<string, MisplacedArticulo>>(new Map());
     const [notFoundScannedItems, setNotFoundScannedItems] = useState<Map<string, { count: number }>>(new Map());
-    const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
-    const [isLoadingDepts, setIsLoadingDepts] = useState<boolean>(false);
+    const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
+    const [isLoadingDepts, setIsLoadingDepts] = useState<boolean>(true);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
     const [loadingError, setLoadingError] = useState<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // --- MODIFICADO: Efecto para GUARDAR el progreso en localStorage ---
     useEffect(() => {
         if (isLoadingData) return;
         const key = `progreso_inventario_${sucursalSeleccionada}`;
+        
+        // Guardamos solo el conteo, no toda la estructura del artículo
+        const conteoFisico = new Map();
+        allBranchItems.forEach(item => {
+            if (item.stockFisico > 0) {
+                conteoFisico.set(item.id, { stockFisico: item.stockFisico });
+            }
+        });
+
         const progreso: ProgresoGuardado = {
-            allBranchItems,
+            conteoFisico: Array.from(conteoFisico.entries()),
             misplacedItems: Array.from(misplacedItems.entries()),
             notFoundScannedItems: Array.from(notFoundScannedItems.entries()),
         };
         localStorage.setItem(key, JSON.stringify(progreso));
+
     }, [allBranchItems, misplacedItems, notFoundScannedItems, sucursalSeleccionada, isLoadingData]);
 
+    // --- MODIFICADO: Efecto para CARGAR DATOS y FUSIONAR Progreso Guardado ---
     useEffect(() => {
         const loadBranchData = async () => {
             setIsLoadingDepts(true); setIsLoadingData(true); setLoadingError(null);
@@ -118,16 +131,31 @@ const InventarioSuc = () => {
                 
                 const key = `progreso_inventario_${sucursalSeleccionada}`;
                 const progresoGuardadoJSON = localStorage.getItem(key);
+                let itemsParaEstadoFinal = itemsFromDB;
 
                 if (progresoGuardadoJSON) {
+                    console.log("Progreso guardado encontrado. Fusionando...");
                     const progresoGuardado: ProgresoGuardado = JSON.parse(progresoGuardadoJSON);
-                    console.log("Progreso restaurado desde localStorage.");
-                    setAllBranchItems(progresoGuardado.allBranchItems);
+                    const conteoGuardado = new Map(progresoGuardado.conteoFisico);
+
+                    // --- LÓGICA DE FUSIÓN DE DATOS (CORRECCIÓN IMPORTANTE) ---
+                    itemsParaEstadoFinal = itemsFromDB.map(itemDeDB => {
+                        if (conteoGuardado.has(itemDeDB.id)) {
+                            const stockFisico = conteoGuardado.get(itemDeDB.id)!.stockFisico;
+                            return {
+                                ...itemDeDB,
+                                stockFisico: stockFisico,
+                                diferencia: stockFisico - itemDeDB.stockSistema,
+                            };
+                        }
+                        return itemDeDB;
+                    });
+                    
                     setMisplacedItems(new Map(progresoGuardado.misplacedItems));
                     setNotFoundScannedItems(new Map(progresoGuardado.notFoundScannedItems));
-                } else {
-                    setAllBranchItems(itemsFromDB);
                 }
+                
+                setAllBranchItems(itemsParaEstadoFinal);
 
             } catch (error: any) {
                 console.error("Error cargando datos de sucursal:", error);
@@ -245,9 +273,7 @@ const InventarioSuc = () => {
             doc.text(`Reporte final consolidado. Generado: ${fecha}`, 14, 30);
 
             let itemsFiltradosParaReporte = [...allBranchItems];
-            
             const articulosConDiferencia = itemsFiltradosParaReporte.filter(a => a.diferencia !== 0);
-            
             articulosConDiferencia.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
             if (articulosConDiferencia.length > 0) {
@@ -268,12 +294,7 @@ const InventarioSuc = () => {
                     // @ts-ignore
                     startY: doc.lastAutoTable.finalY + 10,
                     head: [['Código', 'Nombre', 'Ubicación Esperada', 'Ubicación Real']],
-                    body: misplacedOrdenado.map(a => [
-                        a.id,
-                        a.nombre,
-                        a.ubicacionEsperada,
-                        `Depto: ${a.departamento} / Subd: ${a.subdepartamento}`
-                    ]),
+                    body: misplacedOrdenado.map(a => [a.id, a.nombre, a.ubicacionEsperada, `Depto: ${a.departamento} / Subd: ${a.subdepartamento}`]),
                     headStyles: { fillColor: [243, 156, 18] },
                     styles: { fontSize: 8 },
                 });
@@ -336,7 +357,6 @@ const InventarioSuc = () => {
 
             <div style={{ margin: '20px 0' }}>
                 <label htmlFor="barcode-input">Escanear Código:</label>
-                {/* --- INICIO DE LA MODIFICACIÓN --- */}
                 <input
                     ref={inputRef}
                     type="text"
@@ -345,13 +365,10 @@ const InventarioSuc = () => {
                     onInput={(e) => setCodigoInput(e.currentTarget.value)}
                     onKeyDown={handleScanOnEnter}
                     placeholder={isLoadingData ? "Cargando..." : "Esperando escaneo (Enter)"}
-                    // Se ha eliminado la condición que deshabilitaba el input incorrectamente
                     disabled={isLoadingData || !!loadingError || isGeneratingPdf}
                     style={{ marginLeft: '10px', padding: '8px', minWidth: '300px' }}
                 />
                 {errorScanner && <p style={{ color: 'orange', marginTop: '5px' }}>{errorScanner}</p>}
-                {/* Se ha eliminado el párrafo que mostraba el mensaje incorrecto */}
-                {/* --- FIN DE LA MODIFICACIÓN --- */}
             </div>
 
             {(isLoadingData || isLoadingDepts) && <p>Cargando datos y progreso...</p>}
@@ -374,8 +391,8 @@ const InventarioSuc = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {articulosParaMostrarUI.length === 0 && notFoundScannedItems.size === 0 ? (
-                                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '20px', border: '1px solid #ddd'}}>No hay artículos para mostrar en esta vista...</td></tr>
+                            {articulosParaMostrarUI.length === 0 ? (
+                                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '20px', border: '1px solid #ddd'}}>No hay artículos para mostrar en esta vista. Verifique los filtros o comience a escanear.</td></tr>
                             ) : (
                                 articulosParaMostrarUI.map((articulo) => (
                                     <tr key={articulo.id} style={{ backgroundColor: misplacedItems.has(articulo.id) ? '#ffeeba' : (articulo.stockFisico > 0 ? '#e6ffed' : 'transparent'), borderBottom: '1px solid #ddd' }}>
@@ -391,15 +408,7 @@ const InventarioSuc = () => {
                                     </tr>
                                 ))
                             )}
-                            {Array.from(notFoundScannedItems.entries()).map(([id, data]) => (
-                                <tr key={`notfound-${id}`} style={{ backgroundColor: '#f8d7da' }}>
-                                    <td>{id}</td>
-                                    <td colSpan={3}><em>CÓDIGO NO ENCONTRADO EN SISTEMA</em></td>
-                                    <td style={{ textAlign: 'right' }}>-</td>
-                                    <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{data.count}</td>
-                                    <td style={{ textAlign: 'right', color: 'red', fontWeight: 'bold' }}>+{data.count}</td>
-                                </tr>
-                            ))}
+                            {/* La lógica para mostrar notFoundScannedItems en la tabla principal ya no es necesaria si se maneja por separado o se decide no mostrarla aquí */}
                         </tbody>
                     </table>
                      <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
