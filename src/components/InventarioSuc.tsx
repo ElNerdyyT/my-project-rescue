@@ -25,10 +25,10 @@ interface ProgresoGuardado {
     conteoFisico: [string, { stockFisico: number }][];
     misplacedItems: [string, MisplacedArticulo][];
     notFoundScannedItems: [string, { count: number }][];
-    subdeptosRevisados: string[];
+    reportesFinalizados: [string, Articulo[]][];
 }
 
-// --- Configuraciones y Funciones de Carga (RESTAURADAS) ---
+// --- Configuraciones y Funciones de Carga ---
 const sucursalesConfig: { [key: string]: string } = {
     'Mexico': 'ArticulosMexico', 'Econo1': 'ArticulosEcono1', 'Baja': 'ArticulosBaja',
     'Sucursal4': 'ArticulosSucursal4', 'Sucursal5': 'ArticulosSucursal5',
@@ -41,7 +41,8 @@ const cargarArticulosSucursal = async (nombreSucursal: string): Promise<Articulo
     try {
         const { data, error } = await supabase.from(tableName).select('cve_articulo_a, nombre_comer_a, cant_piso_a, depto_a, subdepto_a');
         if (error) throw error;
-        return data ? data.map((item: any) => ({
+        if (!data) return [];
+        return data.map((item: any) => ({
             id: item.cve_articulo_a,
             nombre: item.nombre_comer_a || 'Nombre no disponible',
             stockSistema: Number(item.cant_piso_a) || 0,
@@ -49,7 +50,7 @@ const cargarArticulosSucursal = async (nombreSucursal: string): Promise<Articulo
             diferencia: 0 - (Number(item.cant_piso_a) || 0),
             departamento: item.depto_a?.toString().trim() || 'Sin Depto',
             subdepartamento: item.subdepto_a?.toString().trim() || 'Sin Subdepto',
-        })) : [];
+        }));
     } catch (err) {
         console.error("Error en cargarArticulosSucursal:", err);
         throw err;
@@ -62,7 +63,8 @@ const cargarDepartamentos = async (nombreSucursal: string): Promise<string[]> =>
     try {
         const { data, error } = await supabase.from(tableName).select('depto_a');
         if (error) throw error;
-        const depts = data ? [...new Set(data.map((item: any) => item.depto_a?.toString().trim() || ''))].filter(Boolean).sort() : [];
+        if (!data) return [];
+        const depts = [...new Set(data.map((item: any) => item.depto_a?.toString().trim() || ''))].filter(Boolean).sort();
         return depts;
     } catch (err) {
         console.error(`Error cargando departamentos:`, err);
@@ -79,18 +81,18 @@ const InventarioSuc = () => {
     const [selectedSubDept, setSelectedSubDept] = useState<string>(TODOS_SUBDEPTOS);
     const [misplacedItems, setMisplacedItems] = useState<Map<string, MisplacedArticulo>>(new Map());
     const [notFoundScannedItems, setNotFoundScannedItems] = useState<Map<string, { count: number }>>(new Map());
-    const [subdeptosRevisados, setSubdeptosRevisados] = useState<Set<string>>(new Set());
+    const [reportesFinalizados, setReportesFinalizados] = useState<Map<string, Articulo[]>>(new Map());
     const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
     const [loadingError, setLoadingError] = useState<string | null>(null);
     const [codigoInput, setCodigoInput] = useState<string>('');
     const [errorScanner, setErrorScanner] = useState<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
-    const saveLock = useRef(false);
 
     useEffect(() => {
         const loadBranchData = async () => {
             setIsLoadingData(true); setLoadingError(null);
+            setAllBranchItems([]); setMisplacedItems(new Map()); setNotFoundScannedItems(new Map()); setReportesFinalizados(new Map());
             setSelectedDept(TODOS_DEPTOS); setSelectedSubDept(TODOS_SUBDEPTOS);
             try {
                 const [depts, itemsFromDB] = await Promise.all([cargarDepartamentos(sucursalSeleccionada), cargarArticulosSucursal(sucursalSeleccionada)]);
@@ -99,29 +101,18 @@ const InventarioSuc = () => {
                 const progresoGuardadoJSON = localStorage.getItem(key);
                 let itemsParaEstadoFinal = itemsFromDB;
                 if (progresoGuardadoJSON) {
-                    try {
-                        const progreso: ProgresoGuardado = JSON.parse(progresoGuardadoJSON);
-                        const conteoGuardado = new Map(Array.isArray(progreso.conteoFisico) ? progreso.conteoFisico : []);
-                        itemsParaEstadoFinal = itemsFromDB.map(itemDeDB => {
-                            if (conteoGuardado.has(itemDeDB.id)) {
-                                const stockFisico = conteoGuardado.get(itemDeDB.id)!.stockFisico;
-                                return { ...itemDeDB, stockFisico, diferencia: stockFisico - itemDeDB.stockSistema };
-                            }
-                            return itemDeDB;
-                        });
-                        setMisplacedItems(new Map(Array.isArray(progreso.misplacedItems) ? progreso.misplacedItems : []));
-                        setNotFoundScannedItems(new Map(Array.isArray(progreso.notFoundScannedItems) ? progreso.notFoundScannedItems : []));
-                        setSubdeptosRevisados(new Set(Array.isArray(progreso.subdeptosRevisados) ? progreso.subdeptosRevisados : []));
-                    } catch (e) {
-                        console.error("Error al parsear datos de localStorage, iniciando de cero.", e);
-                        setMisplacedItems(new Map());
-                        setNotFoundScannedItems(new Map());
-                        setSubdeptosRevisados(new Set());
-                    }
-                } else {
-                    setMisplacedItems(new Map());
-                    setNotFoundScannedItems(new Map());
-                    setSubdeptosRevisados(new Set());
+                    const progreso: ProgresoGuardado = JSON.parse(progresoGuardadoJSON);
+                    const conteoGuardado = new Map(progreso.conteoFisico);
+                    itemsParaEstadoFinal = itemsFromDB.map(itemDeDB => {
+                        if (conteoGuardado.has(itemDeDB.id)) {
+                            const stockFisico = conteoGuardado.get(itemDeDB.id)!.stockFisico;
+                            return { ...itemDeDB, stockFisico, diferencia: stockFisico - itemDeDB.stockSistema };
+                        }
+                        return itemDeDB;
+                    });
+                    setMisplacedItems(new Map(progreso.misplacedItems));
+                    setNotFoundScannedItems(new Map(progreso.notFoundScannedItems));
+                    setReportesFinalizados(new Map(progreso.reportesFinalizados));
                 }
                 setAllBranchItems(itemsParaEstadoFinal);
             } catch (error: any) {
@@ -134,9 +125,7 @@ const InventarioSuc = () => {
     }, [sucursalSeleccionada]);
 
     useEffect(() => {
-        if (isLoadingData || saveLock.current) {
-            return;
-        }
+        if (isLoadingData) return;
         const key = `progreso_inventario_${sucursalSeleccionada}`;
         const conteoFisico = new Map();
         allBranchItems.forEach(item => {
@@ -146,16 +135,14 @@ const InventarioSuc = () => {
             conteoFisico: Array.from(conteoFisico.entries()),
             misplacedItems: Array.from(misplacedItems.entries()),
             notFoundScannedItems: Array.from(notFoundScannedItems.entries()),
-            subdeptosRevisados: Array.from(subdeptosRevisados),
+            reportesFinalizados: Array.from(reportesFinalizados.entries()),
         };
         localStorage.setItem(key, JSON.stringify(progreso));
-    }, [allBranchItems, misplacedItems, notFoundScannedItems, subdeptosRevisados, sucursalSeleccionada, isLoadingData]);
-    
+    }, [allBranchItems, misplacedItems, notFoundScannedItems, reportesFinalizados, sucursalSeleccionada, isLoadingData]);
+
     const availableSubDepts = useMemo(() => {
         if (selectedDept === TODOS_DEPTOS) return [];
-        const subDepts = allBranchItems
-            .filter(item => item.departamento === selectedDept)
-            .map(item => item.subdepartamento);
+        const subDepts = allBranchItems.filter(item => item.departamento === selectedDept).map(item => item.subdepartamento);
         return [TODOS_SUBDEPTOS, ...[...new Set(subDepts)].sort()];
     }, [allBranchItems, selectedDept]);
 
@@ -177,20 +164,22 @@ const InventarioSuc = () => {
                 artActualizado.stockFisico += 1;
                 artActualizado.diferencia = artActualizado.stockFisico - artActualizado.stockSistema;
                 nuevosAllItems[globalArticuloIndex] = artActualizado;
-                if (selectedDept !== TODOS_DEPTOS && selectedSubDept !== TODOS_SUBDEPTOS) {
-                    const esDeptoIncorrecto = articuloEnSistema.departamento !== selectedDept;
-                    const esSubdeptoIncorrecto = articuloEnSistema.subdepartamento !== selectedSubDept;
-                    if (esDeptoIncorrecto || esSubdeptoIncorrecto) {
-                        const ubicacionReal = `Depto: ${articuloEnSistema.departamento} / Subd: ${articuloEnSistema.subdepartamento}`;
-                        setErrorScanner(`Artículo ${codigo} (${articuloEnSistema.nombre}) pertenece a: ${ubicacionReal}.`);
-                        const ubicacionEsperada = `Depto: ${selectedDept} / Subd: ${selectedSubDept}`;
-                        setMisplacedItems(prev => new Map(prev).set(codigo, { ...artActualizado, ubicacionEsperada }));
-                    } else {
-                        setMisplacedItems(prev => {
-                            if (prev.has(codigo)) { const nuevos = new Map(prev); nuevos.delete(codigo); return nuevos; }
-                            return prev;
-                        });
-                    }
+                const esDeptoIncorrecto = articuloEnSistema.departamento !== selectedDept;
+                const esSubdeptoIncorrecto = selectedSubDept !== TODOS_SUBDEPTOS && articuloEnSistema.subdepartamento !== selectedSubDept;
+                if (selectedDept !== TODOS_DEPTOS && (esDeptoIncorrecto || esSubdeptoIncorrecto)) {
+                    const ubicacionReal = `Depto: ${articuloEnSistema.departamento} / Subd: ${articuloEnSistema.subdepartamento}`;
+                    setErrorScanner(`Artículo ${codigo} (${articuloEnSistema.nombre}) pertenece a: ${ubicacionReal}.`);
+                    const ubicacionEsperada = `Depto: ${selectedDept}${selectedSubDept !== TODOS_SUBDEPTOS ? ' / Subd: ' + selectedSubDept : ''}`;
+                    setMisplacedItems(prev => new Map(prev).set(codigo, { ...artActualizado, ubicacionEsperada }));
+                } else {
+                    setMisplacedItems(prev => {
+                        if (prev.has(codigo)) {
+                            const nuevos = new Map(prev);
+                            nuevos.delete(codigo);
+                            return nuevos;
+                        }
+                        return prev;
+                    });
                 }
                 return nuevosAllItems;
             });
@@ -201,18 +190,17 @@ const InventarioSuc = () => {
         setCodigoInput('');
         if (inputRef.current) { inputRef.current.value = ''; inputRef.current.focus(); }
     };
-    
-    const generarPdfSubdepto = () => {
+
+    const finalizarYGenerarPdfSubdepto = () => {
         setIsGeneratingPdf(true);
         const subDeptKey = `${selectedDept}-${selectedSubDept}`;
         const articulosDelSubdepto = allBranchItems.filter(a => a.departamento === selectedDept && a.subdepartamento === selectedSubDept);
         const doc = new jsPDF();
         doc.setFontSize(16);
-        doc.text(`Reporte Provisional - Subdepto: ${selectedSubDept}`, 14, 22);
+        doc.text(`Reporte de Inventario - Subdepartamento: ${selectedSubDept}`, 14, 22);
         doc.setFontSize(11);
         doc.text(`Sucursal: ${sucursalSeleccionada} / Departamento: ${selectedDept}`, 14, 30);
-        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-');
-        doc.text(`Generado: ${timestamp}`, 14, 36);
+        doc.text(`Generado: ${new Date().toLocaleString()}`, 14, 36);
         const articulosConDiferencia = articulosDelSubdepto.filter(a => a.diferencia !== 0);
         if (articulosConDiferencia.length > 0) {
              autoTable(doc, {
@@ -224,38 +212,36 @@ const InventarioSuc = () => {
         } else {
              autoTable(doc, { startY: 45, body: [['No se encontraron diferencias en este subdepartamento.']] });
         }
-        const safeDept = selectedDept.replace(/[\\/:"*?<>|]/g, '_');
-        const safeSubDept = selectedSubDept.replace(/[\\/:"*?<>|]/g, '_');
-        const nombreArchivo = `Reporte_Prov_${sucursalSeleccionada}_${safeDept}_${safeSubDept}_${timestamp}.pdf`;
-        doc.save(nombreArchivo);
-        setSubdeptosRevisados(prev => new Set(prev).add(subDeptKey));
+        doc.save(`Reporte_${sucursalSeleccionada}_${selectedDept}_${selectedSubDept}.pdf`);
+        setReportesFinalizados(prev => new Map(prev).set(subDeptKey, articulosDelSubdepto));
         setIsGeneratingPdf(false);
-        alert(`Reporte provisional para "${selectedSubDept}" generado. Puede continuar haciendo ajustes o seleccionar otro subdepartamento.`);
+        alert(`Reporte para "${selectedSubDept}" generado y guardado. Por favor, seleccione otro subdepartamento.`);
+        setSelectedSubDept(TODOS_SUBDEPTOS);
     };
 
+    // --- MODIFICADO: Genera el PDF final consolidado CON TABLAS DE EXCEPCIONES ---
     const generarPdfFinalConsolidado = () => {
-         if (subdeptosRevisados.size === 0) {
-            alert("No ha marcado ningún subdepartamento como 'revisado' para generar un reporte consolidado.");
+         if (reportesFinalizados.size === 0) {
+            alert("No hay subdepartamentos finalizados para generar un reporte consolidado.");
             return;
         }
         setIsGeneratingPdf(true);
         const doc = new jsPDF();
-        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-');
         doc.setFontSize(18);
         doc.text(`Reporte Final Consolidado - ${sucursalSeleccionada}`, 14, 22);
         doc.setFontSize(11);
-        doc.text(`Generado: ${timestamp}`, 14, 30);
+        doc.text(`Generado: ${new Date().toLocaleString()}`, 14, 30);
+        
         let finalY = 35;
-        for (const key of subdeptosRevisados) {
-            const [depto, subdepto] = key.split('-');
-            const articulos = allBranchItems.filter(a => a.departamento === depto && a.subdepartamento === subdepto);
+
+        for (const [key, articulos] of reportesFinalizados.entries()) {
             const articulosConDiferencia = articulos.filter(a => a.diferencia !== 0);
             if (articulosConDiferencia.length === 0) continue;
-            
+            const [depto, subdepto] = key.split('-');
             doc.setFontSize(14);
             const startY = finalY > 250 ? 20 : finalY + 15;
             if (startY === 20) doc.addPage();
-            doc.text(`Resultados Finales para: ${depto} / ${subdepto}`, 14, startY);
+            doc.text(`Resultados para: ${depto} / ${subdepto}`, 14, startY);
             autoTable(doc, {
                 startY: startY + 5,
                 head: [['Código', 'Nombre', 'Sist.', 'Físico', 'Dif.']],
@@ -265,12 +251,15 @@ const InventarioSuc = () => {
             // @ts-ignore
             finalY = doc.lastAutoTable.finalY;
         }
+
+        // --- INICIO DE LA LÓGICA AÑADIDA ---
+        // Agregar tabla de Artículos Mal Ubicados al final del reporte consolidado
         if (misplacedItems.size > 0) {
             const misplacedOrdenado = Array.from(misplacedItems.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
             const startY = finalY > 250 ? 20 : finalY + 15;
             if (startY === 20) doc.addPage();
             doc.setFontSize(14);
-            doc.text("Resumen de Artículos Mal Ubicados", 14, startY);
+            doc.text("Resumen de Artículos Mal Ubicados (Toda la Sesión)", 14, startY);
             autoTable(doc, {
                 startY: startY + 5,
                 head: [['Código', 'Nombre', 'Ubicación Esperada', 'Ubicación Real']],
@@ -281,12 +270,14 @@ const InventarioSuc = () => {
             // @ts-ignore
             finalY = doc.lastAutoTable.finalY;
         }
+
+        // Agregar tabla de Códigos No Encontrados al final del reporte consolidado
         if (notFoundScannedItems.size > 0) {
             const notFoundOrdenado = Array.from(notFoundScannedItems.entries()).sort((a, b) => a[0].localeCompare(b[0]));
             const startY = finalY > 250 ? 20 : finalY + 15;
             if (startY === 20) doc.addPage();
             doc.setFontSize(14);
-            doc.text("Resumen de Códigos No Encontrados", 14, startY);
+            doc.text("Resumen de Códigos No Encontrados (Toda la Sesión)", 14, startY);
             autoTable(doc, {
                 startY: startY + 5,
                 head: [['Código No Encontrado', 'Veces Escaneado']],
@@ -295,41 +286,22 @@ const InventarioSuc = () => {
                 styles: { fontSize: 8 },
             });
         }
-        doc.save(`Reporte_Consolidado_Final_${sucursalSeleccionada}_${timestamp}.pdf`);
+        // --- FIN DE LA LÓGICA AÑADIDA ---
+
+        doc.save(`Reporte_Consolidado_Final_${sucursalSeleccionada}.pdf`);
         setIsGeneratingPdf(false);
     };
 
-    const limpiarProgreso = async () => {
+    const limpiarProgreso = () => {
         if (confirm(`¿Está seguro de que desea borrar TODO el progreso de inventario para la sucursal ${sucursalSeleccionada}? Esta acción no se puede deshacer.`)) {
-            saveLock.current = true;
-            setIsLoadingData(true);
-            setLoadingError(null);
-            const key = `progreso_inventario_${sucursalSeleccionada}`;
-            localStorage.removeItem(key);
-            setMisplacedItems(new Map());
-            setNotFoundScannedItems(new Map());
-            setSubdeptosRevisados(new Set());
-            setSelectedDept(TODOS_DEPTOS);
-            setSelectedSubDept(TODOS_SUBDEPTOS);
-            try {
-                const itemsFromDB = await cargarArticulosSucursal(sucursalSeleccionada);
-                setAllBranchItems(itemsFromDB);
-                alert("El progreso ha sido limpiado exitosamente.");
-            } catch (error: any) {
-                setLoadingError(`Error recargando la lista de artículos: ${error.message}`);
-            } finally {
-                setIsLoadingData(false);
-                setTimeout(() => {
-                    saveLock.current = false;
-                }, 0);
-            }
+            localStorage.removeItem(`progreso_inventario_${sucursalSeleccionada}`);
+            window.location.reload();
         }
     };
     
-    // --- Renderizado del Componente ---
     return (
         <div style={{ padding: '20px' }}>
-            <h2>Control de Inventario Físico (Flexible)</h2>
+            <h2>Control de Inventario Físico por Etapas</h2>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '10px', alignItems: 'center', borderBottom: '1px solid #ccc', paddingBottom: '10px' }}>
                 <div>
                     <label>Sucursal:</label>
@@ -347,29 +319,36 @@ const InventarioSuc = () => {
                     <label>Subdepartamento:</label>
                     <select value={selectedSubDept} onChange={(e) => setSelectedSubDept(e.currentTarget.value)} disabled={selectedDept === TODOS_DEPTOS || isLoadingData}>
                         <option value={TODOS_SUBDEPTOS}>-- Seleccione --</option>
-                        {availableDepts.slice(1).map(sub => (
-                            <option key={sub} value={sub} style={{ backgroundColor: subdeptosRevisados.has(`${selectedDept}-${sub}`) ? '#d4edda' : 'transparent' }}>
-                                {sub} {subdeptosRevisados.has(`${selectedDept}-${sub}`) ? '✓ Revisado' : ''}
+                        {availableSubDepts.slice(1).map(sub => (
+                            <option key={sub} value={sub} style={{ backgroundColor: reportesFinalizados.has(`${selectedDept}-${sub}`) ? '#d4edda' : 'transparent' }}>
+                                {sub} {reportesFinalizados.has(`${selectedDept}-${sub}`) ? '✓ Finalizado' : ''}
                             </option>
                         ))}
                     </select>
                 </div>
                 <div>
-                    <button onClick={generarPdfSubdepto} disabled={selectedSubDept === TODOS_SUBDEPTOS || isGeneratingPdf}>
-                        Generar PDF de Subdepto
+                    <button onClick={finalizarYGenerarPdfSubdepto} disabled={selectedSubDept === TODOS_SUBDEPTOS || isGeneratingPdf || reportesFinalizados.has(`${selectedDept}-${selectedSubDept}`)}>
+                        Finalizar y Generar PDF de Subdepto
                     </button>
                 </div>
             </div>
 
             <div style={{ margin: '20px 0' }}>
-                <label>Escanear Código:</label>
-                <input ref={inputRef} type="text" value={codigoInput} onInput={(e) => setCodigoInput(e.currentTarget.value)}
-                    onKeyDown={(e) => {if (e.key === 'Enter') { e.preventDefault(); procesarCodigo(codigoInput);}}}
+                <label htmlFor="barcode-input">Escanear Código:</label>
+                <input
+                    ref={inputRef}
+                    type="text"
+                    id="barcode-input"
+                    value={codigoInput}
+                    onInput={(e) => setCodigoInput(e.currentTarget.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && procesarCodigo(codigoInput)}
                     placeholder="Esperando escaneo..."
-                    disabled={isLoadingData || isGeneratingPdf || selectedSubDept === TODOS_SUBDEPTOS}
-                    style={{ marginLeft: '10px', padding: '8px', minWidth: '300px' }}/>
+                    disabled={isLoadingData || isGeneratingPdf || selectedSubDept === TODOS_SUBDEPTOS || reportesFinalizados.has(`${selectedDept}-${selectedSubDept}`)}
+                    style={{ marginLeft: '10px', padding: '8px', minWidth: '300px' }}
+                />
                 {errorScanner && <p style={{ color: 'orange', marginTop: '5px' }}>{errorScanner}</p>}
-                {selectedDept !== TODOS_DEPTOS && selectedSubDept === TODOS_SUBDEPTOS && <p style={{color: 'blue'}}>Seleccione un subdepartamento para comenzar a inventariar.</p>}
+                {selectedDept !== TODOS_DEPTOS && selectedSubDept === TODOS_SUBDEPTOS && <p style={{color: 'blue'}}>Seleccione un subdepartamento para comenzar.</p>}
+                {reportesFinalizados.has(`${selectedDept}-${selectedSubDept}`) && <p style={{color: 'green'}}>Este subdepartamento ya ha sido finalizado.</p>}
             </div>
 
             {isLoadingData && <p>Cargando datos y progreso...</p>}
@@ -397,8 +376,8 @@ const InventarioSuc = () => {
             )}
 
             <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #3498db', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button onClick={generarPdfFinalConsolidado} disabled={isGeneratingPdf || subdeptosRevisados.size === 0} style={{backgroundColor: '#27ae60', color: 'white', padding: '10px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer'}}>
-                   Generar Reporte Final Consolidado ({subdeptosRevisados.size} revisados)
+                <button onClick={generarPdfFinalConsolidado} disabled={isGeneratingPdf || reportesFinalizados.size === 0} style={{backgroundColor: '#2ecc71', color: 'white', padding: '10px 15px', border: 'none', borderRadius: '5px'}}>
+                   Generar Reporte Final Consolidado ({reportesFinalizados.size} finalizados)
                 </button>
                 <button onClick={limpiarProgreso} style={{backgroundColor: '#c0392b', color: 'white'}}>
                    Limpiar Progreso de Sucursal
