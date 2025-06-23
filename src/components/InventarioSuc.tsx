@@ -21,12 +21,11 @@ interface MisplacedArticulo extends Articulo {
     ubicacionEsperada: string;
 }
 
-// --- MODIFICADO: Estructura para guardar el progreso ---
 interface ProgresoGuardado {
     conteoFisico: [string, { stockFisico: number }][];
     misplacedItems: [string, MisplacedArticulo][];
     notFoundScannedItems: [string, { count: number }][];
-    subdeptosRevisados: string[]; // <-- Solo guardamos los nombres de los subdeptos "completados"
+    subdeptosRevisados: string[];
 }
 
 // --- Configuraciones y Funciones de Carga ---
@@ -84,7 +83,6 @@ const InventarioSuc = () => {
     const [selectedSubDept, setSelectedSubDept] = useState<string>(TODOS_SUBDEPTOS);
     const [misplacedItems, setMisplacedItems] = useState<Map<string, MisplacedArticulo>>(new Map());
     const [notFoundScannedItems, setNotFoundScannedItems] = useState<Map<string, { count: number }>>(new Map());
-    // --- MODIFICADO: Almacena los subdeptos "revisados", no "finalizados"
     const [subdeptosRevisados, setSubdeptosRevisados] = useState<Set<string>>(new Set());
     const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
@@ -197,7 +195,7 @@ const InventarioSuc = () => {
         if (inputRef.current) { inputRef.current.value = ''; inputRef.current.focus(); }
     };
     
-    // --- MODIFICADO: Genera un PDF PROVISIONAL y marca el subdepto como revisado ---
+    // --- Lógica de Botones y Acciones ---
     const generarPdfSubdepto = () => {
         setIsGeneratingPdf(true);
         const subDeptKey = `${selectedDept}-${selectedSubDept}`;
@@ -207,7 +205,8 @@ const InventarioSuc = () => {
         doc.text(`Reporte Provisional - Subdepto: ${selectedSubDept}`, 14, 22);
         doc.setFontSize(11);
         doc.text(`Sucursal: ${sucursalSeleccionada} / Departamento: ${selectedDept}`, 14, 30);
-        doc.text(`Generado: ${new Date().toLocaleString()}`, 14, 36);
+        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-');
+        doc.text(`Generado: ${timestamp}`, 14, 36);
         const articulosConDiferencia = articulosDelSubdepto.filter(a => a.diferencia !== 0);
         if (articulosConDiferencia.length > 0) {
              autoTable(doc, {
@@ -219,14 +218,12 @@ const InventarioSuc = () => {
         } else {
              autoTable(doc, { startY: 45, body: [['No se encontraron diferencias en este subdepartamento.']] });
         }
-        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-');
         doc.save(`Reporte_Prov_${sucursalSeleccionada}_${selectedDept}_${selectedSubDept}_${timestamp}.pdf`);
         setSubdeptosRevisados(prev => new Set(prev).add(subDeptKey));
         setIsGeneratingPdf(false);
         alert(`Reporte provisional para "${selectedSubDept}" generado. Puede continuar haciendo ajustes o seleccionar otro subdepartamento.`);
     };
 
-    // --- MODIFICADO: Genera el PDF final CONSOLIDADO con los datos más actuales ---
     const generarPdfFinalConsolidado = () => {
          if (subdeptosRevisados.size === 0) {
             alert("No ha marcado ningún subdepartamento como 'revisado' para generar un reporte consolidado.");
@@ -234,10 +231,11 @@ const InventarioSuc = () => {
         }
         setIsGeneratingPdf(true);
         const doc = new jsPDF();
+        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-');
         doc.setFontSize(18);
         doc.text(`Reporte Final Consolidado - ${sucursalSeleccionada}`, 14, 22);
         doc.setFontSize(11);
-        doc.text(`Generado: ${new Date().toLocaleString()}`, 14, 30);
+        doc.text(`Generado: ${timestamp}`, 14, 30);
         let finalY = 35;
         for (const key of subdeptosRevisados) {
             const [depto, subdepto] = key.split('-');
@@ -288,14 +286,14 @@ const InventarioSuc = () => {
                 styles: { fontSize: 8 },
             });
         }
-        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-');
         doc.save(`Reporte_Consolidado_Final_${sucursalSeleccionada}_${timestamp}.pdf`);
         setIsGeneratingPdf(false);
     };
 
     const limpiarProgreso = () => {
         if (confirm(`¿Está seguro de que desea borrar TODO el progreso de inventario para la sucursal ${sucursalSeleccionada}? Esta acción no se puede deshacer.`)) {
-            localStorage.removeItem(`progreso_inventario_${sucursalSeleccionada}`);
+            const key = `progreso_inventario_${sucursalSeleccionada}`;
+            localStorage.removeItem(key);
             window.location.reload();
         }
     };
@@ -382,4 +380,5 @@ const InventarioSuc = () => {
     );
 };
 
+// --- ELIMINADO: Se quitó la declaración duplicada de sucursalesConfig de aquí ---
 export default InventarioSuc;
