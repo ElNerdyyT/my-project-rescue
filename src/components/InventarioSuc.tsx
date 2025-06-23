@@ -57,6 +57,7 @@ const cargarArticulosSucursal = async (nombreSucursal: string): Promise<Articulo
     }
 };
 
+// --- MODIFICADO: Ordenamiento numérico para los departamentos ---
 const cargarDepartamentos = async (nombreSucursal: string): Promise<string[]> => {
     const tableName = sucursalesConfig[nombreSucursal];
     if (!tableName) return [];
@@ -64,7 +65,9 @@ const cargarDepartamentos = async (nombreSucursal: string): Promise<string[]> =>
         const { data, error } = await supabase.from(tableName).select('depto_a');
         if (error) throw error;
         if (!data) return [];
-        const depts = [...new Set(data.map((item: any) => item.depto_a?.toString().trim() || ''))].filter(Boolean).sort();
+        const depts = [...new Set(data.map((item: any) => item.depto_a?.toString().trim() || ''))]
+            .filter(Boolean)
+            .sort((a, b) => Number(a) - Number(b)); // Ordenar numéricamente
         return depts;
     } catch (err) {
         console.error(`Error cargando departamentos:`, err);
@@ -72,7 +75,6 @@ const cargarDepartamentos = async (nombreSucursal: string): Promise<string[]> =>
     }
 };
 
-// --- NUEVA FUNCIÓN ---
 const cargarNombresSubdeptos = async (): Promise<Map<string, string>> => {
     try {
         const { data, error } = await supabase.from('deptos').select('depto, subdepto, nombre');
@@ -89,7 +91,7 @@ const cargarNombresSubdeptos = async (): Promise<Map<string, string>> => {
         return nombresMap;
     } catch (err) {
         console.error("Error cargando nombres de subdepartamentos:", err);
-        return new Map(); // Devuelve un mapa vacío en caso de error para no bloquear la app
+        return new Map();
     }
 };
 
@@ -101,7 +103,7 @@ const InventarioSuc = () => {
     const [availableDepts, setAvailableDepts] = useState<string[]>([]);
     const [selectedDept, setSelectedDept] = useState<string>(TODOS_DEPTOS);
     const [selectedSubDept, setSelectedSubDept] = useState<string>(TODOS_SUBDEPTOS);
-    const [subDeptNombres, setSubDeptNombres] = useState<Map<string, string>>(new Map()); // --- NUEVO ESTADO ---
+    const [subDeptNombres, setSubDeptNombres] = useState<Map<string, string>>(new Map());
     const [isEditingSubDept, setIsEditingSubDept] = useState<boolean>(false);
     const [misplacedItems, setMisplacedItems] = useState<Map<string, MisplacedArticulo>>(new Map());
     const [notFoundScannedItems, setNotFoundScannedItems] = useState<Map<string, { count: number }>>(new Map());
@@ -119,7 +121,6 @@ const InventarioSuc = () => {
             setAllBranchItems([]); setMisplacedItems(new Map()); setNotFoundScannedItems(new Map()); setReportesFinalizados(new Map());
             setSelectedDept(TODOS_DEPTOS); setSelectedSubDept(TODOS_SUBDEPTOS); setIsEditingSubDept(false);
             try {
-                // --- MODIFICADO: Se añade la carga de nombres de subdepartamentos ---
                 const [depts, itemsFromDB, nombresSubdeptos] = await Promise.all([
                     cargarDepartamentos(sucursalSeleccionada),
                     cargarArticulosSucursal(sucursalSeleccionada),
@@ -127,7 +128,7 @@ const InventarioSuc = () => {
                 ]);
                 
                 setAvailableDepts([TODOS_DEPTOS, ...depts]);
-                setSubDeptNombres(nombresSubdeptos); // Guardamos los nombres en el estado
+                setSubDeptNombres(nombresSubdeptos);
 
                 const key = `progreso_inventario_${sucursalSeleccionada}`;
                 const progresoGuardadoJSON = localStorage.getItem(key);
@@ -172,7 +173,7 @@ const InventarioSuc = () => {
         localStorage.setItem(key, JSON.stringify(progreso));
     }, [allBranchItems, misplacedItems, notFoundScannedItems, reportesFinalizados, sucursalSeleccionada, isLoadingData]);
 
-    // --- MODIFICADO: Devuelve objetos {value, label} en lugar de solo strings ---
+    // --- MODIFICADO: Lógica de ordenamiento para subdepartamentos ---
     const availableSubDepts = useMemo(() => {
         if (selectedDept === TODOS_DEPTOS) return [];
         
@@ -180,13 +181,31 @@ const InventarioSuc = () => {
             allBranchItems
                 .filter(item => item.departamento === selectedDept)
                 .map(item => item.subdepartamento)
-        )].sort((a, b) => Number(a) - Number(b)); // Ordenar numéricamente
+        )];
 
-        return subDeptNumbers.map(subDeptNum => {
+        const subDeptObjects = subDeptNumbers.map(subDeptNum => {
             const key = `${selectedDept}-${subDeptNum}`;
-            const label = subDeptNombres.get(key) || `Subdepto ${subDeptNum}`; // Usar nombre o fallback
+            const label = subDeptNombres.get(key) || subDeptNum;
             return { value: subDeptNum, label: label };
         });
+
+        // Aplicar ordenamiento personalizado
+        subDeptObjects.sort((a, b) => {
+            const aIsNumericOnly = a.label === a.value;
+            const bIsNumericOnly = b.label === b.value;
+
+            if (!aIsNumericOnly && bIsNumericOnly) return -1; // Los con nombre van primero
+            if (aIsNumericOnly && !bIsNumericOnly) return 1;  // Los numéricos van después
+
+            if (!aIsNumericOnly && !bIsNumericOnly) {
+                return a.label.localeCompare(b.label); // Ordenar alfabéticamente si ambos tienen nombre
+            }
+            
+            // Ordenar numéricamente si ambos son solo números
+            return Number(a.value) - Number(b.value); 
+        });
+
+        return subDeptObjects;
     }, [allBranchItems, selectedDept, subDeptNombres]);
 
     const articulosParaMostrarUI = useMemo(() => {
@@ -381,7 +400,6 @@ const InventarioSuc = () => {
                 </div>
                 <div>
                     <label>Subdepartamento:</label>
-                    {/* --- MODIFICADO: Mapea sobre objetos {value, label} --- */}
                     <select value={selectedSubDept} onChange={(e) => setSelectedSubDept(e.currentTarget.value)} disabled={selectedDept === TODOS_DEPTOS || isLoadingData || isEditingSubDept}>
                         <option value={TODOS_SUBDEPTOS}>-- Seleccione --</option>
                         {availableSubDepts.map(sub => {
