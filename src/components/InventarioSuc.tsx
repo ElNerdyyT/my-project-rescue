@@ -28,7 +28,7 @@ interface ProgresoGuardado {
     subdeptosRevisados: string[];
 }
 
-// --- Configuraciones y Funciones de Carga ---
+// --- Configuraciones y Funciones de Carga (RESTAURADAS) ---
 const sucursalesConfig: { [key: string]: string } = {
     'Mexico': 'ArticulosMexico', 'Econo1': 'ArticulosEcono1', 'Baja': 'ArticulosBaja',
     'Sucursal4': 'ArticulosSucursal4', 'Sucursal5': 'ArticulosSucursal5',
@@ -69,7 +69,6 @@ const cargarDepartamentos = async (nombreSucursal: string): Promise<string[]> =>
         return [];
     }
 };
-
 
 // --- Componente Principal ---
 const InventarioSuc = () => {
@@ -154,7 +153,9 @@ const InventarioSuc = () => {
     
     const availableSubDepts = useMemo(() => {
         if (selectedDept === TODOS_DEPTOS) return [];
-        const subDepts = allBranchItems.filter(item => item.departamento === selectedDept).map(item => item.subdepartamento);
+        const subDepts = allBranchItems
+            .filter(item => item.departamento === selectedDept)
+            .map(item => item.subdepartamento);
         return [TODOS_SUBDEPTOS, ...[...new Set(subDepts)].sort()];
     }, [allBranchItems, selectedDept]);
 
@@ -201,7 +202,6 @@ const InventarioSuc = () => {
         if (inputRef.current) { inputRef.current.value = ''; inputRef.current.focus(); }
     };
     
-    // --- LÓGICA DE BOTONES Y ACCIONES ---
     const generarPdfSubdepto = () => {
         setIsGeneratingPdf(true);
         const subDeptKey = `${selectedDept}-${selectedSubDept}`;
@@ -224,16 +224,10 @@ const InventarioSuc = () => {
         } else {
              autoTable(doc, { startY: 45, body: [['No se encontraron diferencias en este subdepartamento.']] });
         }
-
-        // --- INICIO DE LA CORRECCIÓN ---
-        // Sanitizar los nombres para que sean válidos en cualquier sistema operativo
         const safeDept = selectedDept.replace(/[\\/:"*?<>|]/g, '_');
         const safeSubDept = selectedSubDept.replace(/[\\/:"*?<>|]/g, '_');
         const nombreArchivo = `Reporte_Prov_${sucursalSeleccionada}_${safeDept}_${safeSubDept}_${timestamp}.pdf`;
-        
         doc.save(nombreArchivo);
-        // --- FIN DE LA CORRECCIÓN ---
-
         setSubdeptosRevisados(prev => new Set(prev).add(subDeptKey));
         setIsGeneratingPdf(false);
         alert(`Reporte provisional para "${selectedSubDept}" generado. Puede continuar haciendo ajustes o seleccionar otro subdepartamento.`);
@@ -366,6 +360,7 @@ const InventarioSuc = () => {
                     </button>
                 </div>
             </div>
+
             <div style={{ margin: '20px 0' }}>
                 <label>Escanear Código:</label>
                 <input ref={inputRef} type="text" value={codigoInput} onInput={(e) => setCodigoInput(e.currentTarget.value)}
@@ -376,9 +371,11 @@ const InventarioSuc = () => {
                 {errorScanner && <p style={{ color: 'orange', marginTop: '5px' }}>{errorScanner}</p>}
                 {selectedDept !== TODOS_DEPTOS && selectedSubDept === TODOS_SUBDEPTOS && <p style={{color: 'blue'}}>Seleccione un subdepartamento para comenzar a inventariar.</p>}
             </div>
+
             {isLoadingData && <p>Cargando datos y progreso...</p>}
             {isGeneratingPdf && <p style={{ color: 'blue' }}>Generando PDF, por favor espera...</p>}
             {loadingError && <p style={{ color: 'red' }}><strong>Error:</strong> {loadingError}</p>}
+            
             {!isLoadingData && selectedSubDept !== TODOS_SUBDEPTOS && (
                  <table cellPadding="8" cellSpacing="0" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                     <thead style={{ backgroundColor: '#f2f2f2' }}><tr><th style={{border: '1px solid #ddd'}}>Código</th><th style={{border: '1px solid #ddd'}}>Nombre</th><th style={{border: '1px solid #ddd', textAlign:'right'}}>Sistema</th><th style={{border: '1px solid #ddd', textAlign:'right'}}>Físico</th><th style={{border: '1px solid #ddd', textAlign:'right'}}>Diferencia</th></tr></thead>
@@ -398,6 +395,7 @@ const InventarioSuc = () => {
                     </tbody>
                 </table>
             )}
+
             <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #3498db', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <button onClick={generarPdfFinalConsolidado} disabled={isGeneratingPdf || subdeptosRevisados.size === 0} style={{backgroundColor: '#27ae60', color: 'white', padding: '10px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer'}}>
                    Generar Reporte Final Consolidado ({subdeptosRevisados.size} revisados)
