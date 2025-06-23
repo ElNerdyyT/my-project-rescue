@@ -131,7 +131,6 @@ const InventarioSuc = () => {
         }
         items = items.filter(item => item.stockSistema !== 0 || item.stockFisico !== 0);
         
-        // ORDENAMIENTO ALFABÉTICO AÑADIDO
         items.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
         return items;
@@ -215,16 +214,18 @@ const InventarioSuc = () => {
                 }
             }
             
-            const articulosConteo = itemsFiltradosParaReporte.filter(a => a.stockFisico > 0 || a.diferencia !== 0);
+            // ***** INICIO DE LA MODIFICACIÓN *****
+            // De la lista filtrada, tomar SOLO los que tienen una diferencia distinta de cero.
+            const articulosConDiferencia = itemsFiltradosParaReporte.filter(a => a.diferencia !== 0);
+            // ***** FIN DE LA MODIFICACIÓN *****
             
-            // ORDENAMIENTO ALFABÉTICO AÑADIDO
-            articulosConteo.sort((a, b) => a.nombre.localeCompare(b.nombre));
+            articulosConDiferencia.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
-            if (articulosConteo.length > 0) {
+            if (articulosConDiferencia.length > 0) {
                 autoTable(doc, {
                     startY: 45,
                     head: [['Código', 'Nombre', 'Depto', 'Subdepto', 'Sist.', 'Físico', 'Dif.']],
-                    body: articulosConteo.map(a => [
+                    body: articulosConDiferencia.map(a => [
                         a.id,
                         a.nombre,
                         a.departamento,
@@ -239,12 +240,11 @@ const InventarioSuc = () => {
             } else {
                  autoTable(doc, {
                     startY: 45,
-                    body: [['No se contaron artículos ni se encontraron diferencias para la selección actual.']],
+                    body: [['No se encontraron artículos con diferencias para la selección actual.']],
                 });
             }
 
             if (misplacedItems.size > 0) {
-                // ORDENAMIENTO ALFABÉTICO AÑADIDO
                 const misplacedOrdenado = Array.from(misplacedItems.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
                 autoTable(doc, {
                     // @ts-ignore
@@ -262,7 +262,6 @@ const InventarioSuc = () => {
             }
 
             if (notFoundScannedItems.size > 0) {
-                 // ORDENAMIENTO POR CÓDIGO AÑADIDO
                 const notFoundOrdenado = Array.from(notFoundScannedItems.entries()).sort((a, b) => a[0].localeCompare(b[0]));
                 autoTable(doc, {
                     // @ts-ignore
