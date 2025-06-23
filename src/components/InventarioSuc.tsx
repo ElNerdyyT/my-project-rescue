@@ -21,11 +21,12 @@ interface MisplacedArticulo extends Articulo {
     ubicacionEsperada: string;
 }
 
+// --- MODIFICADO: Estructura para guardar el progreso ---
 interface ProgresoGuardado {
     conteoFisico: [string, { stockFisico: number }][];
     misplacedItems: [string, MisplacedArticulo][];
     notFoundScannedItems: [string, { count: number }][];
-    reportesFinalizados: [string, Articulo[]][];
+    subdeptosRevisados: string[]; // <-- Solo guardamos los nombres de los subdeptos "completados"
 }
 
 // --- Configuraciones y Funciones de Carga ---
@@ -72,8 +73,10 @@ const cargarDepartamentos = async (nombreSucursal: string): Promise<string[]> =>
     }
 };
 
+
 // --- Componente Principal ---
 const InventarioSuc = () => {
+    // --- Estados ---
     const [sucursalSeleccionada, setSucursalSeleccionada] = useState<string>(Object.keys(sucursalesConfig)[0]);
     const [allBranchItems, setAllBranchItems] = useState<Articulo[]>([]);
     const [availableDepts, setAvailableDepts] = useState<string[]>([]);
@@ -81,7 +84,8 @@ const InventarioSuc = () => {
     const [selectedSubDept, setSelectedSubDept] = useState<string>(TODOS_SUBDEPTOS);
     const [misplacedItems, setMisplacedItems] = useState<Map<string, MisplacedArticulo>>(new Map());
     const [notFoundScannedItems, setNotFoundScannedItems] = useState<Map<string, { count: number }>>(new Map());
-    const [reportesFinalizados, setReportesFinalizados] = useState<Map<string, Articulo[]>>(new Map());
+    // --- MODIFICADO: Almacena los subdeptos "revisados", no "finalizados"
+    const [subdeptosRevisados, setSubdeptosRevisados] = useState<Set<string>>(new Set());
     const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
     const [loadingError, setLoadingError] = useState<string | null>(null);
@@ -89,10 +93,11 @@ const InventarioSuc = () => {
     const [errorScanner, setErrorScanner] = useState<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // --- Carga y Fusión de Datos ---
     useEffect(() => {
         const loadBranchData = async () => {
             setIsLoadingData(true); setLoadingError(null);
-            setAllBranchItems([]); setMisplacedItems(new Map()); setNotFoundScannedItems(new Map()); setReportesFinalizados(new Map());
+            setAllBranchItems([]); setMisplacedItems(new Map()); setNotFoundScannedItems(new Map()); setSubdeptosRevisados(new Set());
             setSelectedDept(TODOS_DEPTOS); setSelectedSubDept(TODOS_SUBDEPTOS);
             try {
                 const [depts, itemsFromDB] = await Promise.all([cargarDepartamentos(sucursalSeleccionada), cargarArticulosSucursal(sucursalSeleccionada)]);
@@ -112,7 +117,7 @@ const InventarioSuc = () => {
                     });
                     setMisplacedItems(new Map(progreso.misplacedItems));
                     setNotFoundScannedItems(new Map(progreso.notFoundScannedItems));
-                    setReportesFinalizados(new Map(progreso.reportesFinalizados));
+                    setSubdeptosRevisados(new Set(progreso.subdeptosRevisados));
                 }
                 setAllBranchItems(itemsParaEstadoFinal);
             } catch (error: any) {
@@ -124,6 +129,7 @@ const InventarioSuc = () => {
         loadBranchData();
     }, [sucursalSeleccionada]);
 
+    // --- Guardado Automático de Progreso ---
     useEffect(() => {
         if (isLoadingData) return;
         const key = `progreso_inventario_${sucursalSeleccionada}`;
@@ -135,11 +141,12 @@ const InventarioSuc = () => {
             conteoFisico: Array.from(conteoFisico.entries()),
             misplacedItems: Array.from(misplacedItems.entries()),
             notFoundScannedItems: Array.from(notFoundScannedItems.entries()),
-            reportesFinalizados: Array.from(reportesFinalizados.entries()),
+            subdeptosRevisados: Array.from(subdeptosRevisados),
         };
         localStorage.setItem(key, JSON.stringify(progreso));
-    }, [allBranchItems, misplacedItems, notFoundScannedItems, reportesFinalizados, sucursalSeleccionada, isLoadingData]);
+    }, [allBranchItems, misplacedItems, notFoundScannedItems, subdeptosRevisados, sucursalSeleccionada, isLoadingData]);
 
+    // --- Datos Derivados (Memos) ---
     const availableSubDepts = useMemo(() => {
         if (selectedDept === TODOS_DEPTOS) return [];
         const subDepts = allBranchItems.filter(item => item.departamento === selectedDept).map(item => item.subdepartamento);
@@ -152,6 +159,7 @@ const InventarioSuc = () => {
         return items.filter(item => item.stockSistema !== 0 || item.stockFisico !== 0).sort((a, b) => a.nombre.localeCompare(b.nombre));
     }, [allBranchItems, selectedDept, selectedSubDept]);
 
+    // --- Lógica de Procesamiento de Escaneo ---
     const procesarCodigo = (codigo: string) => {
         if (!codigo) return;
         setErrorScanner(null);
@@ -164,22 +172,20 @@ const InventarioSuc = () => {
                 artActualizado.stockFisico += 1;
                 artActualizado.diferencia = artActualizado.stockFisico - artActualizado.stockSistema;
                 nuevosAllItems[globalArticuloIndex] = artActualizado;
-                const esDeptoIncorrecto = articuloEnSistema.departamento !== selectedDept;
-                const esSubdeptoIncorrecto = selectedSubDept !== TODOS_SUBDEPTOS && articuloEnSistema.subdepartamento !== selectedSubDept;
-                if (selectedDept !== TODOS_DEPTOS && (esDeptoIncorrecto || esSubdeptoIncorrecto)) {
-                    const ubicacionReal = `Depto: ${articuloEnSistema.departamento} / Subd: ${articuloEnSistema.subdepartamento}`;
-                    setErrorScanner(`Artículo ${codigo} (${articuloEnSistema.nombre}) pertenece a: ${ubicacionReal}.`);
-                    const ubicacionEsperada = `Depto: ${selectedDept}${selectedSubDept !== TODOS_SUBDEPTOS ? ' / Subd: ' + selectedSubDept : ''}`;
-                    setMisplacedItems(prev => new Map(prev).set(codigo, { ...artActualizado, ubicacionEsperada }));
-                } else {
-                    setMisplacedItems(prev => {
-                        if (prev.has(codigo)) {
-                            const nuevos = new Map(prev);
-                            nuevos.delete(codigo);
-                            return nuevos;
-                        }
-                        return prev;
-                    });
+                if (selectedDept !== TODOS_DEPTOS && selectedSubDept !== TODOS_SUBDEPTOS) {
+                    const esDeptoIncorrecto = articuloEnSistema.departamento !== selectedDept;
+                    const esSubdeptoIncorrecto = articuloEnSistema.subdepartamento !== selectedSubDept;
+                    if (esDeptoIncorrecto || esSubdeptoIncorrecto) {
+                        const ubicacionReal = `Depto: ${articuloEnSistema.departamento} / Subd: ${articuloEnSistema.subdepartamento}`;
+                        setErrorScanner(`Artículo ${codigo} (${articuloEnSistema.nombre}) pertenece a: ${ubicacionReal}.`);
+                        const ubicacionEsperada = `Depto: ${selectedDept} / Subd: ${selectedSubDept}`;
+                        setMisplacedItems(prev => new Map(prev).set(codigo, { ...artActualizado, ubicacionEsperada }));
+                    } else {
+                        setMisplacedItems(prev => {
+                            if (prev.has(codigo)) { const nuevos = new Map(prev); nuevos.delete(codigo); return nuevos; }
+                            return prev;
+                        });
+                    }
                 }
                 return nuevosAllItems;
             });
@@ -190,14 +196,15 @@ const InventarioSuc = () => {
         setCodigoInput('');
         if (inputRef.current) { inputRef.current.value = ''; inputRef.current.focus(); }
     };
-
-    const finalizarYGenerarPdfSubdepto = () => {
+    
+    // --- MODIFICADO: Genera un PDF PROVISIONAL y marca el subdepto como revisado ---
+    const generarPdfSubdepto = () => {
         setIsGeneratingPdf(true);
         const subDeptKey = `${selectedDept}-${selectedSubDept}`;
         const articulosDelSubdepto = allBranchItems.filter(a => a.departamento === selectedDept && a.subdepartamento === selectedSubDept);
         const doc = new jsPDF();
         doc.setFontSize(16);
-        doc.text(`Reporte de Inventario - Subdepartamento: ${selectedSubDept}`, 14, 22);
+        doc.text(`Reporte Provisional - Subdepto: ${selectedSubDept}`, 14, 22);
         doc.setFontSize(11);
         doc.text(`Sucursal: ${sucursalSeleccionada} / Departamento: ${selectedDept}`, 14, 30);
         doc.text(`Generado: ${new Date().toLocaleString()}`, 14, 36);
@@ -212,18 +219,17 @@ const InventarioSuc = () => {
         } else {
              autoTable(doc, { startY: 45, body: [['No se encontraron diferencias en este subdepartamento.']] });
         }
-        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-'); // Crea un formato YYYY-MM-DD_HH-mm-ss
-        doc.save(`Reporte_${sucursalSeleccionada}_${selectedDept}_${selectedSubDept}_${timestamp}.pdf`);
-        setReportesFinalizados(prev => new Map(prev).set(subDeptKey, articulosDelSubdepto));
+        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-');
+        doc.save(`Reporte_Prov_${sucursalSeleccionada}_${selectedDept}_${selectedSubDept}_${timestamp}.pdf`);
+        setSubdeptosRevisados(prev => new Set(prev).add(subDeptKey));
         setIsGeneratingPdf(false);
-        alert(`Reporte para "${selectedSubDept}" generado y guardado. Por favor, seleccione otro subdepartamento.`);
-        setSelectedSubDept(TODOS_SUBDEPTOS);
+        alert(`Reporte provisional para "${selectedSubDept}" generado. Puede continuar haciendo ajustes o seleccionar otro subdepartamento.`);
     };
 
-    // --- MODIFICADO: Genera el PDF final consolidado CON TABLAS DE EXCEPCIONES ---
+    // --- MODIFICADO: Genera el PDF final CONSOLIDADO con los datos más actuales ---
     const generarPdfFinalConsolidado = () => {
-         if (reportesFinalizados.size === 0) {
-            alert("No hay subdepartamentos finalizados para generar un reporte consolidado.");
+         if (subdeptosRevisados.size === 0) {
+            alert("No ha marcado ningún subdepartamento como 'revisado' para generar un reporte consolidado.");
             return;
         }
         setIsGeneratingPdf(true);
@@ -232,17 +238,17 @@ const InventarioSuc = () => {
         doc.text(`Reporte Final Consolidado - ${sucursalSeleccionada}`, 14, 22);
         doc.setFontSize(11);
         doc.text(`Generado: ${new Date().toLocaleString()}`, 14, 30);
-        
         let finalY = 35;
-
-        for (const [key, articulos] of reportesFinalizados.entries()) {
+        for (const key of subdeptosRevisados) {
+            const [depto, subdepto] = key.split('-');
+            const articulos = allBranchItems.filter(a => a.departamento === depto && a.subdepartamento === subdepto);
             const articulosConDiferencia = articulos.filter(a => a.diferencia !== 0);
             if (articulosConDiferencia.length === 0) continue;
-            const [depto, subdepto] = key.split('-');
+            
             doc.setFontSize(14);
             const startY = finalY > 250 ? 20 : finalY + 15;
             if (startY === 20) doc.addPage();
-            doc.text(`Resultados para: ${depto} / ${subdepto}`, 14, startY);
+            doc.text(`Resultados Finales para: ${depto} / ${subdepto}`, 14, startY);
             autoTable(doc, {
                 startY: startY + 5,
                 head: [['Código', 'Nombre', 'Sist.', 'Físico', 'Dif.']],
@@ -252,15 +258,12 @@ const InventarioSuc = () => {
             // @ts-ignore
             finalY = doc.lastAutoTable.finalY;
         }
-
-        // --- INICIO DE LA LÓGICA AÑADIDA ---
-        // Agregar tabla de Artículos Mal Ubicados al final del reporte consolidado
         if (misplacedItems.size > 0) {
             const misplacedOrdenado = Array.from(misplacedItems.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
             const startY = finalY > 250 ? 20 : finalY + 15;
             if (startY === 20) doc.addPage();
             doc.setFontSize(14);
-            doc.text("Resumen de Artículos Mal Ubicados (Toda la Sesión)", 14, startY);
+            doc.text("Resumen de Artículos Mal Ubicados", 14, startY);
             autoTable(doc, {
                 startY: startY + 5,
                 head: [['Código', 'Nombre', 'Ubicación Esperada', 'Ubicación Real']],
@@ -271,14 +274,12 @@ const InventarioSuc = () => {
             // @ts-ignore
             finalY = doc.lastAutoTable.finalY;
         }
-
-        // Agregar tabla de Códigos No Encontrados al final del reporte consolidado
         if (notFoundScannedItems.size > 0) {
             const notFoundOrdenado = Array.from(notFoundScannedItems.entries()).sort((a, b) => a[0].localeCompare(b[0]));
             const startY = finalY > 250 ? 20 : finalY + 15;
             if (startY === 20) doc.addPage();
             doc.setFontSize(14);
-            doc.text("Resumen de Códigos No Encontrados (Toda la Sesión)", 14, startY);
+            doc.text("Resumen de Códigos No Encontrados", 14, startY);
             autoTable(doc, {
                 startY: startY + 5,
                 head: [['Código No Encontrado', 'Veces Escaneado']],
@@ -287,9 +288,7 @@ const InventarioSuc = () => {
                 styles: { fontSize: 8 },
             });
         }
-        // --- FIN DE LA LÓGICA AÑADIDA ---
-
-        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-'); // Crea un formato YYYY-MM-DD_HH-mm-ss
+        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-');
         doc.save(`Reporte_Consolidado_Final_${sucursalSeleccionada}_${timestamp}.pdf`);
         setIsGeneratingPdf(false);
     };
@@ -301,9 +300,10 @@ const InventarioSuc = () => {
         }
     };
     
+    // --- Renderizado del Componente ---
     return (
         <div style={{ padding: '20px' }}>
-            <h2>Control de Inventario Físico por Etapas</h2>
+            <h2>Control de Inventario Físico (Flexible)</h2>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '10px', alignItems: 'center', borderBottom: '1px solid #ccc', paddingBottom: '10px' }}>
                 <div>
                     <label>Sucursal:</label>
@@ -322,35 +322,28 @@ const InventarioSuc = () => {
                     <select value={selectedSubDept} onChange={(e) => setSelectedSubDept(e.currentTarget.value)} disabled={selectedDept === TODOS_DEPTOS || isLoadingData}>
                         <option value={TODOS_SUBDEPTOS}>-- Seleccione --</option>
                         {availableSubDepts.slice(1).map(sub => (
-                            <option key={sub} value={sub} style={{ backgroundColor: reportesFinalizados.has(`${selectedDept}-${sub}`) ? '#d4edda' : 'transparent' }}>
-                                {sub} {reportesFinalizados.has(`${selectedDept}-${sub}`) ? '✓ Finalizado' : ''}
+                            <option key={sub} value={sub} style={{ backgroundColor: subdeptosRevisados.has(`${selectedDept}-${sub}`) ? '#d4edda' : 'transparent' }}>
+                                {sub} {subdeptosRevisados.has(`${selectedDept}-${sub}`) ? '✓ Revisado' : ''}
                             </option>
                         ))}
                     </select>
                 </div>
                 <div>
-                    <button onClick={finalizarYGenerarPdfSubdepto} disabled={selectedSubDept === TODOS_SUBDEPTOS || isGeneratingPdf || reportesFinalizados.has(`${selectedDept}-${selectedSubDept}`)}>
-                        Finalizar y Generar PDF de Subdepto
+                    <button onClick={generarPdfSubdepto} disabled={selectedSubDept === TODOS_SUBDEPTOS || isGeneratingPdf}>
+                        Generar PDF de Subdepto
                     </button>
                 </div>
             </div>
 
             <div style={{ margin: '20px 0' }}>
-                <label htmlFor="barcode-input">Escanear Código:</label>
-                <input
-                    ref={inputRef}
-                    type="text"
-                    id="barcode-input"
-                    value={codigoInput}
-                    onInput={(e) => setCodigoInput(e.currentTarget.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && procesarCodigo(codigoInput)}
+                <label>Escanear Código:</label>
+                <input ref={inputRef} type="text" value={codigoInput} onInput={(e) => setCodigoInput(e.currentTarget.value)}
+                    onKeyDown={(e) => {if (e.key === 'Enter') { e.preventDefault(); procesarCodigo(codigoInput);}}}
                     placeholder="Esperando escaneo..."
-                    disabled={isLoadingData || isGeneratingPdf || selectedSubDept === TODOS_SUBDEPTOS || reportesFinalizados.has(`${selectedDept}-${selectedSubDept}`)}
-                    style={{ marginLeft: '10px', padding: '8px', minWidth: '300px' }}
-                />
+                    disabled={isLoadingData || isGeneratingPdf || selectedSubDept === TODOS_SUBDEPTOS}
+                    style={{ marginLeft: '10px', padding: '8px', minWidth: '300px' }}/>
                 {errorScanner && <p style={{ color: 'orange', marginTop: '5px' }}>{errorScanner}</p>}
-                {selectedDept !== TODOS_DEPTOS && selectedSubDept === TODOS_SUBDEPTOS && <p style={{color: 'blue'}}>Seleccione un subdepartamento para comenzar.</p>}
-                {reportesFinalizados.has(`${selectedDept}-${selectedSubDept}`) && <p style={{color: 'green'}}>Este subdepartamento ya ha sido finalizado.</p>}
+                {selectedDept !== TODOS_DEPTOS && selectedSubDept === TODOS_SUBDEPTOS && <p style={{color: 'blue'}}>Seleccione un subdepartamento para comenzar a inventariar.</p>}
             </div>
 
             {isLoadingData && <p>Cargando datos y progreso...</p>}
@@ -378,8 +371,8 @@ const InventarioSuc = () => {
             )}
 
             <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #3498db', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button onClick={generarPdfFinalConsolidado} disabled={isGeneratingPdf || reportesFinalizados.size === 0} style={{backgroundColor: '#2ecc71', color: 'white', padding: '10px 15px', border: 'none', borderRadius: '5px'}}>
-                   Generar Reporte Final Consolidado ({reportesFinalizados.size} finalizados)
+                <button onClick={generarPdfFinalConsolidado} disabled={isGeneratingPdf || subdeptosRevisados.size === 0} style={{backgroundColor: '#27ae60', color: 'white', padding: '10px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer'}}>
+                   Generar Reporte Final Consolidado ({subdeptosRevisados.size} revisados)
                 </button>
                 <button onClick={limpiarProgreso} style={{backgroundColor: '#c0392b', color: 'white'}}>
                    Limpiar Progreso de Sucursal
