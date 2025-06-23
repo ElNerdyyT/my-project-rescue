@@ -66,7 +66,7 @@ const cargarDepartamentos = async (nombreSucursal: string): Promise<string[]> =>
         return depts;
     } catch (err) {
         console.error(`Error cargando departamentos:`, err);
-        throw err;
+        return [];
     }
 };
 
@@ -87,10 +87,8 @@ const InventarioSuc = () => {
     const [codigoInput, setCodigoInput] = useState<string>('');
     const [errorScanner, setErrorScanner] = useState<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
-    // --- NUEVO: "Seguro" para evitar el auto-guardado durante la limpieza ---
     const saveLock = useRef(false);
 
-    // --- Carga y Fusión de Datos ---
     useEffect(() => {
         const loadBranchData = async () => {
             setIsLoadingData(true); setLoadingError(null);
@@ -136,9 +134,7 @@ const InventarioSuc = () => {
         loadBranchData();
     }, [sucursalSeleccionada]);
 
-    // --- Guardado Automático de Progreso ---
     useEffect(() => {
-        // --- MODIFICADO: Se añade el chequeo del "seguro" ---
         if (isLoadingData || saveLock.current) {
             return;
         }
@@ -156,7 +152,6 @@ const InventarioSuc = () => {
         localStorage.setItem(key, JSON.stringify(progreso));
     }, [allBranchItems, misplacedItems, notFoundScannedItems, subdeptosRevisados, sucursalSeleccionada, isLoadingData]);
     
-    // --- Lógica de la Interfaz y de Negocio (sin cambios) ---
     const availableSubDepts = useMemo(() => {
         if (selectedDept === TODOS_DEPTOS) return [];
         const subDepts = allBranchItems.filter(item => item.departamento === selectedDept).map(item => item.subdepartamento);
@@ -206,40 +201,130 @@ const InventarioSuc = () => {
         if (inputRef.current) { inputRef.current.value = ''; inputRef.current.focus(); }
     };
     
-    const generarPdfSubdepto = () => { /* ... sin cambios ... */ };
-    const generarPdfFinalConsolidado = () => { /* ... sin cambios ... */ };
-    
-    // --- LÓGICA DE "LIMPIAR PROGRESO" (VERSIÓN CON SEGURO) ---
+    // --- LÓGICA DE BOTONES Y ACCIONES ---
+    const generarPdfSubdepto = () => {
+        setIsGeneratingPdf(true);
+        const subDeptKey = `${selectedDept}-${selectedSubDept}`;
+        const articulosDelSubdepto = allBranchItems.filter(a => a.departamento === selectedDept && a.subdepartamento === selectedSubDept);
+        const doc = new jsPDF();
+        doc.setFontSize(16);
+        doc.text(`Reporte Provisional - Subdepto: ${selectedSubDept}`, 14, 22);
+        doc.setFontSize(11);
+        doc.text(`Sucursal: ${sucursalSeleccionada} / Departamento: ${selectedDept}`, 14, 30);
+        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-');
+        doc.text(`Generado: ${timestamp}`, 14, 36);
+        const articulosConDiferencia = articulosDelSubdepto.filter(a => a.diferencia !== 0);
+        if (articulosConDiferencia.length > 0) {
+             autoTable(doc, {
+                startY: 45,
+                head: [['Código', 'Nombre', 'Sist.', 'Físico', 'Dif.']],
+                body: articulosConDiferencia.sort((a,b) => a.nombre.localeCompare(b.nombre)).map(a => [a.id, a.nombre, a.stockSistema, a.stockFisico, a.diferencia > 0 ? `+${a.diferencia}` : a.diferencia]),
+                styles: { fontSize: 9 },
+            });
+        } else {
+             autoTable(doc, { startY: 45, body: [['No se encontraron diferencias en este subdepartamento.']] });
+        }
+
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Sanitizar los nombres para que sean válidos en cualquier sistema operativo
+        const safeDept = selectedDept.replace(/[\\/:"*?<>|]/g, '_');
+        const safeSubDept = selectedSubDept.replace(/[\\/:"*?<>|]/g, '_');
+        const nombreArchivo = `Reporte_Prov_${sucursalSeleccionada}_${safeDept}_${safeSubDept}_${timestamp}.pdf`;
+        
+        doc.save(nombreArchivo);
+        // --- FIN DE LA CORRECCIÓN ---
+
+        setSubdeptosRevisados(prev => new Set(prev).add(subDeptKey));
+        setIsGeneratingPdf(false);
+        alert(`Reporte provisional para "${selectedSubDept}" generado. Puede continuar haciendo ajustes o seleccionar otro subdepartamento.`);
+    };
+
+    const generarPdfFinalConsolidado = () => {
+         if (subdeptosRevisados.size === 0) {
+            alert("No ha marcado ningún subdepartamento como 'revisado' para generar un reporte consolidado.");
+            return;
+        }
+        setIsGeneratingPdf(true);
+        const doc = new jsPDF();
+        const timestamp = new Date().toLocaleString('sv').replace(/ /g, '_').replace(/:/g, '-');
+        doc.setFontSize(18);
+        doc.text(`Reporte Final Consolidado - ${sucursalSeleccionada}`, 14, 22);
+        doc.setFontSize(11);
+        doc.text(`Generado: ${timestamp}`, 14, 30);
+        let finalY = 35;
+        for (const key of subdeptosRevisados) {
+            const [depto, subdepto] = key.split('-');
+            const articulos = allBranchItems.filter(a => a.departamento === depto && a.subdepartamento === subdepto);
+            const articulosConDiferencia = articulos.filter(a => a.diferencia !== 0);
+            if (articulosConDiferencia.length === 0) continue;
+            
+            doc.setFontSize(14);
+            const startY = finalY > 250 ? 20 : finalY + 15;
+            if (startY === 20) doc.addPage();
+            doc.text(`Resultados Finales para: ${depto} / ${subdepto}`, 14, startY);
+            autoTable(doc, {
+                startY: startY + 5,
+                head: [['Código', 'Nombre', 'Sist.', 'Físico', 'Dif.']],
+                body: articulosConDiferencia.sort((a,b) => a.nombre.localeCompare(b.nombre)).map(a => [a.id, a.nombre, a.stockSistema, a.stockFisico, a.diferencia > 0 ? `+${a.diferencia}` : a.diferencia]),
+                styles: { fontSize: 9 },
+            });
+            // @ts-ignore
+            finalY = doc.lastAutoTable.finalY;
+        }
+        if (misplacedItems.size > 0) {
+            const misplacedOrdenado = Array.from(misplacedItems.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
+            const startY = finalY > 250 ? 20 : finalY + 15;
+            if (startY === 20) doc.addPage();
+            doc.setFontSize(14);
+            doc.text("Resumen de Artículos Mal Ubicados", 14, startY);
+            autoTable(doc, {
+                startY: startY + 5,
+                head: [['Código', 'Nombre', 'Ubicación Esperada', 'Ubicación Real']],
+                body: misplacedOrdenado.map(a => [a.id, a.nombre, a.ubicacionEsperada, `Depto: ${a.departamento} / Subd: ${a.subdepartamento}`]),
+                headStyles: { fillColor: [243, 156, 18] },
+                styles: { fontSize: 8 },
+            });
+            // @ts-ignore
+            finalY = doc.lastAutoTable.finalY;
+        }
+        if (notFoundScannedItems.size > 0) {
+            const notFoundOrdenado = Array.from(notFoundScannedItems.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+            const startY = finalY > 250 ? 20 : finalY + 15;
+            if (startY === 20) doc.addPage();
+            doc.setFontSize(14);
+            doc.text("Resumen de Códigos No Encontrados", 14, startY);
+            autoTable(doc, {
+                startY: startY + 5,
+                head: [['Código No Encontrado', 'Veces Escaneado']],
+                body: notFoundOrdenado.map(([id, data]) => [id, data.count]),
+                headStyles: { fillColor: [192, 57, 43] },
+                styles: { fontSize: 8 },
+            });
+        }
+        doc.save(`Reporte_Consolidado_Final_${sucursalSeleccionada}_${timestamp}.pdf`);
+        setIsGeneratingPdf(false);
+    };
+
     const limpiarProgreso = async () => {
         if (confirm(`¿Está seguro de que desea borrar TODO el progreso de inventario para la sucursal ${sucursalSeleccionada}? Esta acción no se puede deshacer.`)) {
-            // 1. Activar el seguro para bloquear el auto-guardado
             saveLock.current = true;
-            
             setIsLoadingData(true);
             setLoadingError(null);
-            
-            // 2. Borrar del localStorage
             const key = `progreso_inventario_${sucursalSeleccionada}`;
             localStorage.removeItem(key);
-
-            // 3. Resetear todos los estados relacionados al progreso
             setMisplacedItems(new Map());
             setNotFoundScannedItems(new Map());
             setSubdeptosRevisados(new Set());
             setSelectedDept(TODOS_DEPTOS);
             setSelectedSubDept(TODOS_SUBDEPTOS);
-
             try {
-                // 4. Volver a cargar la lista limpia de artículos desde la BD
                 const itemsFromDB = await cargarArticulosSucursal(sucursalSeleccionada);
                 setAllBranchItems(itemsFromDB);
                 alert("El progreso ha sido limpiado exitosamente.");
             } catch (error: any) {
                 setLoadingError(`Error recargando la lista de artículos: ${error.message}`);
             } finally {
-                // 5. Finalizar el estado de carga y QUITAR el seguro
                 setIsLoadingData(false);
-                // Usamos un timeout para asegurar que este cambio se procese después del render actual
                 setTimeout(() => {
                     saveLock.current = false;
                 }, 0);
@@ -281,7 +366,6 @@ const InventarioSuc = () => {
                     </button>
                 </div>
             </div>
-
             <div style={{ margin: '20px 0' }}>
                 <label>Escanear Código:</label>
                 <input ref={inputRef} type="text" value={codigoInput} onInput={(e) => setCodigoInput(e.currentTarget.value)}
@@ -292,11 +376,9 @@ const InventarioSuc = () => {
                 {errorScanner && <p style={{ color: 'orange', marginTop: '5px' }}>{errorScanner}</p>}
                 {selectedDept !== TODOS_DEPTOS && selectedSubDept === TODOS_SUBDEPTOS && <p style={{color: 'blue'}}>Seleccione un subdepartamento para comenzar a inventariar.</p>}
             </div>
-
             {isLoadingData && <p>Cargando datos y progreso...</p>}
             {isGeneratingPdf && <p style={{ color: 'blue' }}>Generando PDF, por favor espera...</p>}
             {loadingError && <p style={{ color: 'red' }}><strong>Error:</strong> {loadingError}</p>}
-            
             {!isLoadingData && selectedSubDept !== TODOS_SUBDEPTOS && (
                  <table cellPadding="8" cellSpacing="0" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                     <thead style={{ backgroundColor: '#f2f2f2' }}><tr><th style={{border: '1px solid #ddd'}}>Código</th><th style={{border: '1px solid #ddd'}}>Nombre</th><th style={{border: '1px solid #ddd', textAlign:'right'}}>Sistema</th><th style={{border: '1px solid #ddd', textAlign:'right'}}>Físico</th><th style={{border: '1px solid #ddd', textAlign:'right'}}>Diferencia</th></tr></thead>
@@ -316,7 +398,6 @@ const InventarioSuc = () => {
                     </tbody>
                 </table>
             )}
-
             <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #3498db', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <button onClick={generarPdfFinalConsolidado} disabled={isGeneratingPdf || subdeptosRevisados.size === 0} style={{backgroundColor: '#27ae60', color: 'white', padding: '10px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer'}}>
                    Generar Reporte Final Consolidado ({subdeptosRevisados.size} revisados)
