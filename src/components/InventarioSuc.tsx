@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'preact/hooks';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import JsBarcode from 'jsbarcode';
 import { supabase } from '../utils/supabaseClient';
 
 // Constantes para filtros "Todos"
@@ -114,7 +113,6 @@ const InventarioSuc = () => {
 
     // --- DATOS DERIVADOS CON useMemo ---
 
-    // Deriva la lista de subdepartamentos disponibles a partir del departamento seleccionado
     const availableSubDepts = useMemo(() => {
         if (selectedDept === TODOS_DEPTOS) return [];
         const subDepts = allBranchItems
@@ -123,31 +121,20 @@ const InventarioSuc = () => {
         return [TODOS_SUBDEPTOS, ...[...new Set(subDepts)].sort()];
     }, [allBranchItems, selectedDept]);
 
-    // Deriva la lista de artículos para mostrar en la UI, con el filtro visual aplicado
     const articulosParaMostrarUI = useMemo(() => {
         let items = allBranchItems;
-
-        // 1. Filtrado por departamento y subdepartamento (lógica existente)
         if (selectedDept !== TODOS_DEPTOS) {
             items = items.filter(item => item.departamento === selectedDept);
             if (selectedSubDept !== TODOS_SUBDEPTOS) {
                 items = items.filter(item => item.subdepartamento === selectedSubDept);
             }
         }
-
-        // 2. NUEVO FILTRO: Oculta visualmente los artículos que están en cero y no se han tocado.
-        //    Muestra un artículo si:
-        //    - Su stock en sistema no es cero.
-        //    - O si su stock físico no es cero (es decir, ha sido escaneado).
         items = items.filter(item => item.stockSistema !== 0 || item.stockFisico !== 0);
-
         return items;
     }, [allBranchItems, selectedDept, selectedSubDept]);
 
-
     // --- MANEJO DEL ESCANER Y PROCESAMIENTO ---
 
-    // Función Centralizada para Procesar Código
     const procesarCodigo = (codigo: string) => {
         if (!codigo) return;
         setErrorScanner(null);
@@ -189,27 +176,99 @@ const InventarioSuc = () => {
         }
     };
 
-    // Lógica de escaneo al presionar Enter
     const handleScanOnEnter = (event: KeyboardEvent) => {
         if (event.key === 'Enter') {
             event.preventDefault();
             const codigoActual = (event.target as HTMLInputElement).value.trim();
             if (codigoActual.length === 0) return;
-
             const codigoParaProcesar = codigoActual.length < 13
                 ? codigoActual.padStart(13, '0')
                 : codigoActual;
-
             procesarCodigo(codigoParaProcesar);
         }
     };
 
-
-    // --- GENERACIÓN DE PDF ---
+    // --- GENERACIÓN DE PDF (VERSIÓN COMPLETA) ---
     const generarReportePDF = () => {
-        // La lógica de PDF se mantiene, pero se adapta para incluir subdepartamentos
-        // Se omite la implementación completa por brevedad, pero debe reflejar los cambios.
-        console.log("Generando reporte PDF...");
+        setIsGeneratingPdf(true);
+        try {
+            const doc = new jsPDF();
+            const fecha = new Date().toLocaleString();
+            const deptoSeleccionado = selectedDept === TODOS_DEPTOS ? 'Todos los Departamentos' : `Departamento: ${selectedDept}`;
+            const subDeptoSeleccionado = selectedSubDept === TODOS_SUBDEPTOS || selectedDept === TODOS_DEPTOS ? '' : ` / Subdepto: ${selectedSubDept}`;
+
+            // Título del documento
+            doc.setFontSize(18);
+            doc.text(`Reporte de Inventario Físico - ${sucursalSeleccionada}`, 14, 22);
+            doc.setFontSize(11);
+            doc.text(`Generado: ${fecha}`, 14, 30);
+            doc.text(deptoSeleccionado + subDeptoSeleccionado, 14, 36);
+
+            // 1. Tabla de Resumen de Inventario (Solo artículos con diferencias o conteo)
+            const articulosConteo = allBranchItems.filter(a => a.stockFisico > 0 || a.diferencia !== 0);
+            if (articulosConteo.length > 0) {
+                autoTable(doc, {
+                    startY: 45,
+                    head: [['Código', 'Nombre', 'Depto', 'Subdepto', 'Sist.', 'Físico', 'Dif.']],
+                    body: articulosConteo.map(a => [
+                        a.id,
+                        a.nombre,
+                        a.departamento,
+                        a.subdepartamento,
+                        a.stockSistema,
+                        a.stockFisico,
+                        a.diferencia > 0 ? `+${a.diferencia}` : a.diferencia
+                    ]),
+                    headStyles: { fillColor: [22, 160, 133] },
+                    styles: { fontSize: 8 },
+                });
+            } else {
+                 autoTable(doc, {
+                    startY: 45,
+                    body: [['No se contaron artículos ni se encontraron diferencias.']],
+                });
+            }
+
+
+            // 2. Tabla de Artículos Mal Ubicados
+            if (misplacedItems.size > 0) {
+                autoTable(doc, {
+                    // @ts-ignore
+                    startY: doc.lastAutoTable.finalY + 10,
+                    head: [['Código', 'Nombre', 'Depto. Esperado', 'Depto. Real']],
+                    body: Array.from(misplacedItems.values()).map(a => [
+                        a.id,
+                        a.nombre,
+                        a.departamentoEsperado,
+                        a.departamento,
+                    ]),
+                    headStyles: { fillColor: [243, 156, 18] }, // Naranja
+                    styles: { fontSize: 8 },
+                });
+            }
+
+            // 3. Tabla de Códigos No Encontrados
+            if (notFoundScannedItems.size > 0) {
+                autoTable(doc, {
+                    // @ts-ignore
+                    startY: doc.lastAutoTable.finalY + 10,
+                    head: [['Código No Encontrado', 'Veces Escaneado']],
+                    body: Array.from(notFoundScannedItems.entries()).map(([id, data]) => [id, data.count]),
+                    headStyles: { fillColor: [192, 57, 43] }, // Rojo
+                    styles: { fontSize: 8 },
+                });
+            }
+
+            // Guardar el PDF
+            const nombreArchivo = `Reporte_Inventario_${sucursalSeleccionada}_${new Date().toISOString().slice(0, 10)}.pdf`;
+            doc.save(nombreArchivo);
+
+        } catch (error) {
+            console.error("Error generando el PDF:", error);
+            // Opcional: mostrar un error al usuario
+        } finally {
+            setIsGeneratingPdf(false);
+        }
     };
 
     // --- RENDERIZADO ---
