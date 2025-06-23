@@ -57,7 +57,6 @@ const cargarArticulosSucursal = async (nombreSucursal: string): Promise<Articulo
     }
 };
 
-// --- MODIFICADO: Ordenamiento numérico para los departamentos ---
 const cargarDepartamentos = async (nombreSucursal: string): Promise<string[]> => {
     const tableName = sucursalesConfig[nombreSucursal];
     if (!tableName) return [];
@@ -67,7 +66,7 @@ const cargarDepartamentos = async (nombreSucursal: string): Promise<string[]> =>
         if (!data) return [];
         const depts = [...new Set(data.map((item: any) => item.depto_a?.toString().trim() || ''))]
             .filter(Boolean)
-            .sort((a, b) => Number(a) - Number(b)); // Ordenar numéricamente
+            .sort((a, b) => Number(a) - Number(b));
         return depts;
     } catch (err) {
         console.error(`Error cargando departamentos:`, err);
@@ -173,7 +172,6 @@ const InventarioSuc = () => {
         localStorage.setItem(key, JSON.stringify(progreso));
     }, [allBranchItems, misplacedItems, notFoundScannedItems, reportesFinalizados, sucursalSeleccionada, isLoadingData]);
 
-    // --- MODIFICADO: Lógica de ordenamiento para subdepartamentos ---
     const availableSubDepts = useMemo(() => {
         if (selectedDept === TODOS_DEPTOS) return [];
         
@@ -189,19 +187,17 @@ const InventarioSuc = () => {
             return { value: subDeptNum, label: label };
         });
 
-        // Aplicar ordenamiento personalizado
         subDeptObjects.sort((a, b) => {
             const aIsNumericOnly = a.label === a.value;
             const bIsNumericOnly = b.label === b.value;
 
-            if (!aIsNumericOnly && bIsNumericOnly) return -1; // Los con nombre van primero
-            if (aIsNumericOnly && !bIsNumericOnly) return 1;  // Los numéricos van después
+            if (!aIsNumericOnly && bIsNumericOnly) return -1;
+            if (aIsNumericOnly && !bIsNumericOnly) return 1;
 
             if (!aIsNumericOnly && !bIsNumericOnly) {
-                return a.label.localeCompare(b.label); // Ordenar alfabéticamente si ambos tienen nombre
+                return a.label.localeCompare(b.label);
             }
             
-            // Ordenar numéricamente si ambos son solo números
             return Number(a.value) - Number(b.value); 
         });
 
@@ -214,10 +210,17 @@ const InventarioSuc = () => {
         return items.filter(item => item.stockSistema !== 0 || item.stockFisico !== 0).sort((a, b) => a.nombre.localeCompare(b.nombre));
     }, [allBranchItems, selectedDept, selectedSubDept]);
 
+    // --- MODIFICADO: Añade ceros a la izquierda si el código es menor a 13 caracteres ---
     const procesarCodigo = (codigo: string) => {
         if (!codigo) return;
+        
+        // Formatear el código para que tenga 13 caracteres, rellenando con ceros
+        const codigoFormateado = codigo.length < 13 ? codigo.padStart(13, '0') : codigo;
+
         setErrorScanner(null);
-        const globalArticuloIndex = allBranchItems.findIndex(a => a.id === codigo);
+        
+        const globalArticuloIndex = allBranchItems.findIndex(a => a.id === codigoFormateado);
+
         if (globalArticuloIndex !== -1) {
             const articuloEnSistema = allBranchItems[globalArticuloIndex];
             setAllBranchItems(prevAllItems => {
@@ -226,18 +229,20 @@ const InventarioSuc = () => {
                 artActualizado.stockFisico += 1;
                 artActualizado.diferencia = artActualizado.stockFisico - artActualizado.stockSistema;
                 nuevosAllItems[globalArticuloIndex] = artActualizado;
+                
                 const esDeptoIncorrecto = articuloEnSistema.departamento !== selectedDept;
                 const esSubdeptoIncorrecto = selectedSubDept !== TODOS_SUBDEPTOS && articuloEnSistema.subdepartamento !== selectedSubDept;
+                
                 if (selectedDept !== TODOS_DEPTOS && (esDeptoIncorrecto || esSubdeptoIncorrecto)) {
                     const ubicacionReal = `Depto: ${articuloEnSistema.departamento} / Subd: ${articuloEnSistema.subdepartamento}`;
-                    setErrorScanner(`Artículo ${codigo} (${articuloEnSistema.nombre}) pertenece a: ${ubicacionReal}.`);
+                    setErrorScanner(`Artículo ${codigoFormateado} (${articuloEnSistema.nombre}) pertenece a: ${ubicacionReal}.`);
                     const ubicacionEsperada = `Depto: ${selectedDept}${selectedSubDept !== TODOS_SUBDEPTOS ? ' / Subd: ' + selectedSubDept : ''}`;
-                    setMisplacedItems(prev => new Map(prev).set(codigo, { ...artActualizado, ubicacionEsperada }));
+                    setMisplacedItems(prev => new Map(prev).set(codigoFormateado, { ...artActualizado, ubicacionEsperada }));
                 } else {
                     setMisplacedItems(prev => {
-                        if (prev.has(codigo)) {
+                        if (prev.has(codigoFormateado)) {
                             const nuevos = new Map(prev);
-                            nuevos.delete(codigo);
+                            nuevos.delete(codigoFormateado);
                             return nuevos;
                         }
                         return prev;
@@ -246,9 +251,10 @@ const InventarioSuc = () => {
                 return nuevosAllItems;
             });
         } else {
-            setErrorScanner(`Código ${codigo} NO encontrado en esta sucursal.`);
-            setNotFoundScannedItems(prev => new Map(prev).set(codigo, { count: (prev.get(codigo)?.count || 0) + 1 }));
+            setErrorScanner(`Código ${codigoFormateado} NO encontrado en esta sucursal.`);
+            setNotFoundScannedItems(prev => new Map(prev).set(codigoFormateado, { count: (prev.get(codigoFormateado)?.count || 0) + 1 }));
         }
+        
         setCodigoInput('');
         if (inputRef.current) { inputRef.current.value = ''; inputRef.current.focus(); }
     };
