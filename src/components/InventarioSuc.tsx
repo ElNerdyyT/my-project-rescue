@@ -72,10 +72,8 @@ const cargarDepartamentos = async (nombreSucursal: string): Promise<string[]> =>
     }
 };
 
-
 // --- Componente Principal ---
 const InventarioSuc = () => {
-    // --- Estados ---
     const [sucursalSeleccionada, setSucursalSeleccionada] = useState<string>(Object.keys(sucursalesConfig)[0]);
     const [allBranchItems, setAllBranchItems] = useState<Articulo[]>([]);
     const [availableDepts, setAvailableDepts] = useState<string[]>([]);
@@ -91,11 +89,9 @@ const InventarioSuc = () => {
     const [errorScanner, setErrorScanner] = useState<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // --- Carga y Fusión de Datos ---
     useEffect(() => {
         const loadBranchData = async () => {
             setIsLoadingData(true); setLoadingError(null);
-            setAllBranchItems([]); setMisplacedItems(new Map()); setNotFoundScannedItems(new Map()); setSubdeptosRevisados(new Set());
             setSelectedDept(TODOS_DEPTOS); setSelectedSubDept(TODOS_SUBDEPTOS);
             try {
                 const [depts, itemsFromDB] = await Promise.all([cargarDepartamentos(sucursalSeleccionada), cargarArticulosSucursal(sucursalSeleccionada)]);
@@ -116,6 +112,11 @@ const InventarioSuc = () => {
                     setMisplacedItems(new Map(progreso.misplacedItems));
                     setNotFoundScannedItems(new Map(progreso.notFoundScannedItems));
                     setSubdeptosRevisados(new Set(progreso.subdeptosRevisados));
+                } else {
+                    setAllBranchItems(itemsFromDB);
+                    setMisplacedItems(new Map());
+                    setNotFoundScannedItems(new Map());
+                    setSubdeptosRevisados(new Set());
                 }
                 setAllBranchItems(itemsParaEstadoFinal);
             } catch (error: any) {
@@ -127,7 +128,6 @@ const InventarioSuc = () => {
         loadBranchData();
     }, [sucursalSeleccionada]);
 
-    // --- Guardado Automático de Progreso ---
     useEffect(() => {
         if (isLoadingData) return;
         const key = `progreso_inventario_${sucursalSeleccionada}`;
@@ -144,7 +144,6 @@ const InventarioSuc = () => {
         localStorage.setItem(key, JSON.stringify(progreso));
     }, [allBranchItems, misplacedItems, notFoundScannedItems, subdeptosRevisados, sucursalSeleccionada, isLoadingData]);
 
-    // --- Datos Derivados (Memos) ---
     const availableSubDepts = useMemo(() => {
         if (selectedDept === TODOS_DEPTOS) return [];
         const subDepts = allBranchItems.filter(item => item.departamento === selectedDept).map(item => item.subdepartamento);
@@ -157,7 +156,6 @@ const InventarioSuc = () => {
         return items.filter(item => item.stockSistema !== 0 || item.stockFisico !== 0).sort((a, b) => a.nombre.localeCompare(b.nombre));
     }, [allBranchItems, selectedDept, selectedSubDept]);
 
-    // --- Lógica de Procesamiento de Escaneo ---
     const procesarCodigo = (codigo: string) => {
         if (!codigo) return;
         setErrorScanner(null);
@@ -195,7 +193,6 @@ const InventarioSuc = () => {
         if (inputRef.current) { inputRef.current.value = ''; inputRef.current.focus(); }
     };
     
-    // --- Lógica de Botones y Acciones ---
     const generarPdfSubdepto = () => {
         setIsGeneratingPdf(true);
         const subDeptKey = `${selectedDept}-${selectedSubDept}`;
@@ -290,11 +287,36 @@ const InventarioSuc = () => {
         setIsGeneratingPdf(false);
     };
 
-    const limpiarProgreso = () => {
+    // --- LÓGICA DE "LIMPIAR PROGRESO" (VERSIÓN FINAL Y ROBUSTA) ---
+    const limpiarProgreso = async () => {
         if (confirm(`¿Está seguro de que desea borrar TODO el progreso de inventario para la sucursal ${sucursalSeleccionada}? Esta acción no se puede deshacer.`)) {
+            // 1. Poner la UI en estado de carga para bloquear el auto-guardado
+            setIsLoadingData(true);
+            setLoadingError(null);
+            
+            // 2. Borrar del localStorage
             const key = `progreso_inventario_${sucursalSeleccionada}`;
             localStorage.removeItem(key);
-            window.location.reload();
+
+            // 3. Resetear todos los estados relacionados al progreso a su valor inicial
+            setMisplacedItems(new Map());
+            setNotFoundScannedItems(new Map());
+            setSubdeptosRevisados(new Set());
+            setSelectedDept(TODOS_DEPTOS);
+            setSelectedSubDept(TODOS_SUBDEPTOS);
+
+            try {
+                // 4. Volver a cargar la lista limpia de artículos desde la base de datos
+                console.log("Recargando lista limpia de artículos...");
+                const itemsFromDB = await cargarArticulosSucursal(sucursalSeleccionada);
+                setAllBranchItems(itemsFromDB);
+                alert("El progreso ha sido limpiado exitosamente.");
+            } catch (error: any) {
+                setLoadingError(`Error recargando la lista de artículos: ${error.message}`);
+            } finally {
+                // 5. Finalizar el estado de carga
+                setIsLoadingData(false);
+            }
         }
     };
     
@@ -319,7 +341,7 @@ const InventarioSuc = () => {
                     <label>Subdepartamento:</label>
                     <select value={selectedSubDept} onChange={(e) => setSelectedSubDept(e.currentTarget.value)} disabled={selectedDept === TODOS_DEPTOS || isLoadingData}>
                         <option value={TODOS_SUBDEPTOS}>-- Seleccione --</option>
-                        {availableSubDepts.slice(1).map(sub => (
+                        {availableDepts.slice(1).map(sub => (
                             <option key={sub} value={sub} style={{ backgroundColor: subdeptosRevisados.has(`${selectedDept}-${sub}`) ? '#d4edda' : 'transparent' }}>
                                 {sub} {subdeptosRevisados.has(`${selectedDept}-${sub}`) ? '✓ Revisado' : ''}
                             </option>
@@ -380,5 +402,4 @@ const InventarioSuc = () => {
     );
 };
 
-// --- ELIMINADO: Se quitó la declaración duplicada de sucursalesConfig de aquí ---
 export default InventarioSuc;
