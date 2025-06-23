@@ -72,6 +72,28 @@ const cargarDepartamentos = async (nombreSucursal: string): Promise<string[]> =>
     }
 };
 
+// --- NUEVA FUNCIÓN ---
+const cargarNombresSubdeptos = async (): Promise<Map<string, string>> => {
+    try {
+        const { data, error } = await supabase.from('deptos').select('depto, subdepto, nombre');
+        if (error) throw error;
+        if (!data) return new Map();
+
+        const nombresMap = new Map<string, string>();
+        for (const item of data) {
+            if (item.depto && item.subdepto) {
+                const key = `${item.depto.toString().trim()}-${item.subdepto.toString().trim()}`;
+                nombresMap.set(key, item.nombre || `Subdepto ${item.subdepto}`);
+            }
+        }
+        return nombresMap;
+    } catch (err) {
+        console.error("Error cargando nombres de subdepartamentos:", err);
+        return new Map(); // Devuelve un mapa vacío en caso de error para no bloquear la app
+    }
+};
+
+
 // --- Componente Principal ---
 const InventarioSuc = () => {
     const [sucursalSeleccionada, setSucursalSeleccionada] = useState<string>(Object.keys(sucursalesConfig)[0]);
@@ -79,6 +101,8 @@ const InventarioSuc = () => {
     const [availableDepts, setAvailableDepts] = useState<string[]>([]);
     const [selectedDept, setSelectedDept] = useState<string>(TODOS_DEPTOS);
     const [selectedSubDept, setSelectedSubDept] = useState<string>(TODOS_SUBDEPTOS);
+    const [subDeptNombres, setSubDeptNombres] = useState<Map<string, string>>(new Map()); // --- NUEVO ESTADO ---
+    const [isEditingSubDept, setIsEditingSubDept] = useState<boolean>(false);
     const [misplacedItems, setMisplacedItems] = useState<Map<string, MisplacedArticulo>>(new Map());
     const [notFoundScannedItems, setNotFoundScannedItems] = useState<Map<string, { count: number }>>(new Map());
     const [reportesFinalizados, setReportesFinalizados] = useState<Map<string, Articulo[]>>(new Map());
@@ -93,10 +117,18 @@ const InventarioSuc = () => {
         const loadBranchData = async () => {
             setIsLoadingData(true); setLoadingError(null);
             setAllBranchItems([]); setMisplacedItems(new Map()); setNotFoundScannedItems(new Map()); setReportesFinalizados(new Map());
-            setSelectedDept(TODOS_DEPTOS); setSelectedSubDept(TODOS_SUBDEPTOS);
+            setSelectedDept(TODOS_DEPTOS); setSelectedSubDept(TODOS_SUBDEPTOS); setIsEditingSubDept(false);
             try {
-                const [depts, itemsFromDB] = await Promise.all([cargarDepartamentos(sucursalSeleccionada), cargarArticulosSucursal(sucursalSeleccionada)]);
+                // --- MODIFICADO: Se añade la carga de nombres de subdepartamentos ---
+                const [depts, itemsFromDB, nombresSubdeptos] = await Promise.all([
+                    cargarDepartamentos(sucursalSeleccionada),
+                    cargarArticulosSucursal(sucursalSeleccionada),
+                    cargarNombresSubdeptos()
+                ]);
+                
                 setAvailableDepts([TODOS_DEPTOS, ...depts]);
+                setSubDeptNombres(nombresSubdeptos); // Guardamos los nombres en el estado
+
                 const key = `progreso_inventario_${sucursalSeleccionada}`;
                 const progresoGuardadoJSON = localStorage.getItem(key);
                 let itemsParaEstadoFinal = itemsFromDB;
@@ -140,11 +172,22 @@ const InventarioSuc = () => {
         localStorage.setItem(key, JSON.stringify(progreso));
     }, [allBranchItems, misplacedItems, notFoundScannedItems, reportesFinalizados, sucursalSeleccionada, isLoadingData]);
 
+    // --- MODIFICADO: Devuelve objetos {value, label} en lugar de solo strings ---
     const availableSubDepts = useMemo(() => {
         if (selectedDept === TODOS_DEPTOS) return [];
-        const subDepts = allBranchItems.filter(item => item.departamento === selectedDept).map(item => item.subdepartamento);
-        return [TODOS_SUBDEPTOS, ...[...new Set(subDepts)].sort()];
-    }, [allBranchItems, selectedDept]);
+        
+        const subDeptNumbers = [...new Set(
+            allBranchItems
+                .filter(item => item.departamento === selectedDept)
+                .map(item => item.subdepartamento)
+        )].sort((a, b) => Number(a) - Number(b)); // Ordenar numéricamente
+
+        return subDeptNumbers.map(subDeptNum => {
+            const key = `${selectedDept}-${subDeptNum}`;
+            const label = subDeptNombres.get(key) || `Subdepto ${subDeptNum}`; // Usar nombre o fallback
+            return { value: subDeptNum, label: label };
+        });
+    }, [allBranchItems, selectedDept, subDeptNombres]);
 
     const articulosParaMostrarUI = useMemo(() => {
         if (selectedDept === TODOS_DEPTOS || selectedSubDept === TODOS_SUBDEPTOS) return [];
@@ -190,17 +233,37 @@ const InventarioSuc = () => {
         setCodigoInput('');
         if (inputRef.current) { inputRef.current.value = ''; inputRef.current.focus(); }
     };
+    
+    const handleModificarSubdepto = (subdepto: string) => {
+        setSelectedSubDept(subdepto);
+        setIsEditingSubDept(true); 
+        alert(`Modo de edición activado para "${subdepto}". Ahora puede escanear nuevos artículos. Cuando termine, presione "Actualizar Reporte".`);
+    };
 
     const finalizarYGenerarPdfSubdepto = () => {
         setIsGeneratingPdf(true);
         const subDeptKey = `${selectedDept}-${selectedSubDept}`;
         const articulosDelSubdepto = allBranchItems.filter(a => a.departamento === selectedDept && a.subdepartamento === selectedSubDept);
+
+        if (isEditingSubDept) {
+            setReportesFinalizados(prev => new Map(prev).set(subDeptKey, articulosDelSubdepto));
+            setIsGeneratingPdf(false);
+            setIsEditingSubDept(false);
+            setSelectedSubDept(TODOS_SUBDEPTOS);
+            alert(`Reporte para "${selectedSubDept}" ha sido actualizado. Por favor, seleccione otro subdepartamento.`);
+            return;
+        }
+
         const doc = new jsPDF();
+        const now = new Date();
+        const formattedDateTime = now.toLocaleString();
+        const fileTimestamp = now.toISOString().replace(/[:.]/g, '-');
+
         doc.setFontSize(16);
         doc.text(`Reporte de Inventario - Subdepartamento: ${selectedSubDept}`, 14, 22);
         doc.setFontSize(11);
         doc.text(`Sucursal: ${sucursalSeleccionada} / Departamento: ${selectedDept}`, 14, 30);
-        doc.text(`Generado: ${new Date().toLocaleString()}`, 14, 36);
+        doc.text(`Generado: ${formattedDateTime}`, 14, 36);
         const articulosConDiferencia = articulosDelSubdepto.filter(a => a.diferencia !== 0);
         if (articulosConDiferencia.length > 0) {
              autoTable(doc, {
@@ -212,14 +275,13 @@ const InventarioSuc = () => {
         } else {
              autoTable(doc, { startY: 45, body: [['No se encontraron diferencias en este subdepartamento.']] });
         }
-        doc.save(`Reporte_${sucursalSeleccionada}_${selectedDept}_${selectedSubDept}.pdf`);
+        doc.save(`Reporte_${sucursalSeleccionada}_${selectedDept}_${selectedSubDept}_${fileTimestamp}.pdf`);
         setReportesFinalizados(prev => new Map(prev).set(subDeptKey, articulosDelSubdepto));
         setIsGeneratingPdf(false);
         alert(`Reporte para "${selectedSubDept}" generado y guardado. Por favor, seleccione otro subdepartamento.`);
         setSelectedSubDept(TODOS_SUBDEPTOS);
     };
 
-    // --- MODIFICADO: Genera el PDF final consolidado CON TABLAS DE EXCEPCIONES ---
     const generarPdfFinalConsolidado = () => {
          if (reportesFinalizados.size === 0) {
             alert("No hay subdepartamentos finalizados para generar un reporte consolidado.");
@@ -227,10 +289,14 @@ const InventarioSuc = () => {
         }
         setIsGeneratingPdf(true);
         const doc = new jsPDF();
+        const now = new Date();
+        const formattedDateTime = now.toLocaleString();
+        const fileTimestamp = now.toISOString().replace(/[:.]/g, '-');
+
         doc.setFontSize(18);
         doc.text(`Reporte Final Consolidado - ${sucursalSeleccionada}`, 14, 22);
         doc.setFontSize(11);
-        doc.text(`Generado: ${new Date().toLocaleString()}`, 14, 30);
+        doc.text(`Generado: ${formattedDateTime}`, 14, 30);
         
         let finalY = 35;
 
@@ -252,8 +318,6 @@ const InventarioSuc = () => {
             finalY = doc.lastAutoTable.finalY;
         }
 
-        // --- INICIO DE LA LÓGICA AÑADIDA ---
-        // Agregar tabla de Artículos Mal Ubicados al final del reporte consolidado
         if (misplacedItems.size > 0) {
             const misplacedOrdenado = Array.from(misplacedItems.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
             const startY = finalY > 250 ? 20 : finalY + 15;
@@ -271,7 +335,6 @@ const InventarioSuc = () => {
             finalY = doc.lastAutoTable.finalY;
         }
 
-        // Agregar tabla de Códigos No Encontrados al final del reporte consolidado
         if (notFoundScannedItems.size > 0) {
             const notFoundOrdenado = Array.from(notFoundScannedItems.entries()).sort((a, b) => a[0].localeCompare(b[0]));
             const startY = finalY > 250 ? 20 : finalY + 15;
@@ -286,9 +349,8 @@ const InventarioSuc = () => {
                 styles: { fontSize: 8 },
             });
         }
-        // --- FIN DE LA LÓGICA AÑADIDA ---
-
-        doc.save(`Reporte_Consolidado_Final_${sucursalSeleccionada}.pdf`);
+        
+        doc.save(`Reporte_Consolidado_Final_${sucursalSeleccionada}_${fileTimestamp}.pdf`);
         setIsGeneratingPdf(false);
     };
 
@@ -299,40 +361,70 @@ const InventarioSuc = () => {
         }
     };
     
+    const puedeEscanear = !isLoadingData && !isGeneratingPdf && selectedSubDept !== TODOS_SUBDEPTOS && (!reportesFinalizados.has(`${selectedDept}-${selectedSubDept}`) || isEditingSubDept);
+
     return (
         <div style={{ padding: '20px' }}>
             <h2>Control de Inventario Físico por Etapas</h2>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '10px', alignItems: 'center', borderBottom: '1px solid #ccc', paddingBottom: '10px' }}>
                 <div>
                     <label>Sucursal:</label>
-                    <select value={sucursalSeleccionada} onChange={(e) => setSucursalSeleccionada(e.currentTarget.value)} disabled={isLoadingData || isGeneratingPdf}>
+                    <select value={sucursalSeleccionada} onChange={(e) => setSucursalSeleccionada(e.currentTarget.value)} disabled={isLoadingData || isGeneratingPdf || isEditingSubDept}>
                         {Object.keys(sucursalesConfig).map(suc => (<option key={suc} value={suc}>{suc}</option>))}
                     </select>
                 </div>
                 <div>
                     <label>Departamento:</label>
-                    <select value={selectedDept} onChange={(e) => { setSelectedDept(e.currentTarget.value); setSelectedSubDept(TODOS_SUBDEPTOS); }} disabled={isLoadingData || isGeneratingPdf}>
+                    <select value={selectedDept} onChange={(e) => { setSelectedDept(e.currentTarget.value); setSelectedSubDept(TODOS_SUBDEPTOS); setIsEditingSubDept(false); }} disabled={isLoadingData || isGeneratingPdf || isEditingSubDept}>
                          {availableDepts.map(dept => (<option key={dept} value={dept}>{dept === TODOS_DEPTOS ? 'Todos' : dept}</option>))}
                     </select>
                 </div>
                 <div>
                     <label>Subdepartamento:</label>
-                    <select value={selectedSubDept} onChange={(e) => setSelectedSubDept(e.currentTarget.value)} disabled={selectedDept === TODOS_DEPTOS || isLoadingData}>
+                    {/* --- MODIFICADO: Mapea sobre objetos {value, label} --- */}
+                    <select value={selectedSubDept} onChange={(e) => setSelectedSubDept(e.currentTarget.value)} disabled={selectedDept === TODOS_DEPTOS || isLoadingData || isEditingSubDept}>
                         <option value={TODOS_SUBDEPTOS}>-- Seleccione --</option>
-                        {availableSubDepts.slice(1).map(sub => (
-                            <option key={sub} value={sub} style={{ backgroundColor: reportesFinalizados.has(`${selectedDept}-${sub}`) ? '#d4edda' : 'transparent' }}>
-                                {sub} {reportesFinalizados.has(`${selectedDept}-${sub}`) ? '✓ Finalizado' : ''}
-                            </option>
-                        ))}
+                        {availableSubDepts.map(sub => {
+                            const subDeptKey = `${selectedDept}-${sub.value}`;
+                            const isFinalizado = reportesFinalizados.has(subDeptKey);
+                            return (
+                                <option 
+                                    key={sub.value} 
+                                    value={sub.value} 
+                                    style={{ backgroundColor: isFinalizado ? '#d4edda' : 'transparent' }}
+                                >
+                                    {sub.label} {isFinalizado ? '✓ Finalizado' : ''}
+                                </option>
+                            );
+                        })}
                     </select>
                 </div>
                 <div>
-                    <button onClick={finalizarYGenerarPdfSubdepto} disabled={selectedSubDept === TODOS_SUBDEPTOS || isGeneratingPdf || reportesFinalizados.has(`${selectedDept}-${selectedSubDept}`)}>
-                        Finalizar y Generar PDF de Subdepto
-                    </button>
+                    {isEditingSubDept ? (
+                         <button onClick={finalizarYGenerarPdfSubdepto} disabled={isGeneratingPdf} style={{backgroundColor: '#f39c12', color: 'white'}}>
+                            Actualizar Reporte
+                        </button>
+                    ) : (
+                        <button onClick={finalizarYGenerarPdfSubdepto} disabled={selectedSubDept === TODOS_SUBDEPTOS || isGeneratingPdf || reportesFinalizados.has(`${selectedDept}-${selectedSubDept}`)}>
+                            Finalizar y Generar PDF
+                        </button>
+                    )}
                 </div>
             </div>
 
+            {selectedDept !== TODOS_DEPTOS && !isEditingSubDept && (
+                <div style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #eee' }}>
+                    <p style={{fontWeight: 'bold'}}>Subdepartamentos Finalizados en "{selectedDept}":</p>
+                    {availableSubDepts.filter(sub => reportesFinalizados.has(`${selectedDept}-${sub.value}`)).length > 0 ? (
+                         availableSubDepts.filter(sub => reportesFinalizados.has(`${selectedDept}-${sub.value}`)).map(sub => (
+                            <button key={sub.value} onClick={() => handleModificarSubdepto(sub.value)} style={{marginRight: '10px', backgroundColor: '#3498db', color: 'white'}}>
+                                Modificar "{sub.label}"
+                            </button>
+                        ))
+                    ) : <p>Ninguno.</p>}
+                </div>
+            )}
+            
             <div style={{ margin: '20px 0' }}>
                 <label htmlFor="barcode-input">Escanear Código:</label>
                 <input
@@ -343,12 +435,13 @@ const InventarioSuc = () => {
                     onInput={(e) => setCodigoInput(e.currentTarget.value)}
                     onKeyDown={(e) => e.key === 'Enter' && procesarCodigo(codigoInput)}
                     placeholder="Esperando escaneo..."
-                    disabled={isLoadingData || isGeneratingPdf || selectedSubDept === TODOS_SUBDEPTOS || reportesFinalizados.has(`${selectedDept}-${selectedSubDept}`)}
+                    disabled={!puedeEscanear}
                     style={{ marginLeft: '10px', padding: '8px', minWidth: '300px' }}
                 />
                 {errorScanner && <p style={{ color: 'orange', marginTop: '5px' }}>{errorScanner}</p>}
-                {selectedDept !== TODOS_DEPTOS && selectedSubDept === TODOS_SUBDEPTOS && <p style={{color: 'blue'}}>Seleccione un subdepartamento para comenzar.</p>}
-                {reportesFinalizados.has(`${selectedDept}-${selectedSubDept}`) && <p style={{color: 'green'}}>Este subdepartamento ya ha sido finalizado.</p>}
+                {selectedDept !== TODOS_DEPTOS && selectedSubDept === TODOS_SUBDEPTOS && !isEditingSubDept && <p style={{color: 'blue'}}>Seleccione un subdepartamento o modifique uno finalizado para comenzar.</p>}
+                {reportesFinalizados.has(`${selectedDept}-${selectedSubDept}`) && !isEditingSubDept && <p style={{color: 'green'}}>Este subdepartamento ya ha sido finalizado. Puede modificarlo desde la sección de arriba.</p>}
+                {isEditingSubDept && <p style={{color: 'orange', fontWeight: 'bold'}}>Editando el subdepartamento "{selectedSubDept}". Los artículos que escanee se agregarán al conteo existente.</p>}
             </div>
 
             {isLoadingData && <p>Cargando datos y progreso...</p>}
@@ -376,10 +469,10 @@ const InventarioSuc = () => {
             )}
 
             <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #3498db', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button onClick={generarPdfFinalConsolidado} disabled={isGeneratingPdf || reportesFinalizados.size === 0} style={{backgroundColor: '#2ecc71', color: 'white', padding: '10px 15px', border: 'none', borderRadius: '5px'}}>
+                <button onClick={generarPdfFinalConsolidado} disabled={isGeneratingPdf || reportesFinalizados.size === 0 || isEditingSubDept} style={{backgroundColor: '#2ecc71', color: 'white', padding: '10px 15px', border: 'none', borderRadius: '5px'}}>
                    Generar Reporte Final Consolidado ({reportesFinalizados.size} finalizados)
                 </button>
-                <button onClick={limpiarProgreso} style={{backgroundColor: '#c0392b', color: 'white'}}>
+                <button onClick={limpiarProgreso} style={{backgroundColor: '#c0392b', color: 'white'}} disabled={isEditingSubDept}>
                    Limpiar Progreso de Sucursal
                 </button>
             </div>
