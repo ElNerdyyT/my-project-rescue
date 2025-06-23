@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'preact/hooks';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import JsBarcode from 'jsbarcode';
-import { supabase } from '../utils/supabaseClient'; // Restaurada la importación original
+import { supabase } from '../utils/supabaseClient';
 
 // Constantes para filtros "Todos"
 const TODOS_DEPTOS = "__TODOS_DEPTOS__";
@@ -16,7 +16,7 @@ interface Articulo {
     stockFisico: number;
     diferencia: number;
     departamento: string;
-    subdepartamento: string; // Nuevo campo
+    subdepartamento: string;
 }
 
 interface MisplacedArticulo extends Articulo {
@@ -36,7 +36,6 @@ const cargarArticulosSucursal = async (nombreSucursal: string): Promise<Articulo
     const tableName = sucursalesConfig[nombreSucursal];
     if (!tableName) throw new Error(`Configuración de tabla faltante para ${nombreSucursal}`);
     try {
-        // Se añade subdepto_a a la consulta
         const { data, error } = await supabase.from(tableName)
             .select('cve_articulo_a, nombre_comer_a, cant_piso_a, depto_a, subdepto_a');
         if (error) throw error;
@@ -48,7 +47,7 @@ const cargarArticulosSucursal = async (nombreSucursal: string): Promise<Articulo
             stockFisico: 0,
             diferencia: 0 - (Number(item.cant_piso_a) || 0),
             departamento: item.depto_a?.toString().trim() || 'Sin Depto',
-            subdepartamento: item.subdepto_a?.toString().trim() || 'Sin Subdepto', // Se añade el subdepartamento
+            subdepartamento: item.subdepto_a?.toString().trim() || 'Sin Subdepto',
         }));
     } catch (err) {
         console.error("Error en cargarArticulosSucursal:", err);
@@ -77,9 +76,9 @@ const InventarioSuc = () => {
     const [sucursalSeleccionada, setSucursalSeleccionada] = useState<string>(nombresSucursales[0]);
     const [availableDepts, setAvailableDepts] = useState<string[]>([]);
     const [selectedDept, setSelectedDept] = useState<string>(TODOS_DEPTOS);
-    const [selectedSubDept, setSelectedSubDept] = useState<string>(TODOS_SUBDEPTOS); // Nuevo estado
+    const [selectedSubDept, setSelectedSubDept] = useState<string>(TODOS_SUBDEPTOS);
     const [allBranchItems, setAllBranchItems] = useState<Articulo[]>([]);
-    const [codigoInput, setCodigoInput] = useState<string>(''); // Estado para el valor del input
+    const [codigoInput, setCodigoInput] = useState<string>('');
     const [errorScanner, setErrorScanner] = useState<string | null>(null);
     const [misplacedItems, setMisplacedItems] = useState<Map<string, MisplacedArticulo>>(new Map());
     const [notFoundScannedItems, setNotFoundScannedItems] = useState<Map<string, { count: number }>>(new Map());
@@ -124,15 +123,24 @@ const InventarioSuc = () => {
         return [TODOS_SUBDEPTOS, ...[...new Set(subDepts)].sort()];
     }, [allBranchItems, selectedDept]);
 
-    // Deriva la lista de artículos para mostrar en la UI, ahora con filtro de subdepartamento
+    // Deriva la lista de artículos para mostrar en la UI, con el filtro visual aplicado
     const articulosParaMostrarUI = useMemo(() => {
         let items = allBranchItems;
+
+        // 1. Filtrado por departamento y subdepartamento (lógica existente)
         if (selectedDept !== TODOS_DEPTOS) {
             items = items.filter(item => item.departamento === selectedDept);
             if (selectedSubDept !== TODOS_SUBDEPTOS) {
                 items = items.filter(item => item.subdepartamento === selectedSubDept);
             }
         }
+
+        // 2. NUEVO FILTRO: Oculta visualmente los artículos que están en cero y no se han tocado.
+        //    Muestra un artículo si:
+        //    - Su stock en sistema no es cero.
+        //    - O si su stock físico no es cero (es decir, ha sido escaneado).
+        items = items.filter(item => item.stockSistema !== 0 || item.stockFisico !== 0);
+
         return items;
     }, [allBranchItems, selectedDept, selectedSubDept]);
 
@@ -174,7 +182,6 @@ const InventarioSuc = () => {
             setNotFoundScannedItems(prev => new Map(prev).set(codigo, { count: (prev.get(codigo)?.count || 0) + 1 }));
         }
 
-        // Limpieza inmediata para el siguiente escaneo
         setCodigoInput('');
         if (inputRef.current) {
             inputRef.current.value = '';
@@ -182,15 +189,13 @@ const InventarioSuc = () => {
         }
     };
 
-    // **LÓGICA DE ESCANEO CORREGIDA**
-    // Se procesa al presionar Enter, no por la longitud del código.
+    // Lógica de escaneo al presionar Enter
     const handleScanOnEnter = (event: KeyboardEvent) => {
         if (event.key === 'Enter') {
             event.preventDefault();
             const codigoActual = (event.target as HTMLInputElement).value.trim();
             if (codigoActual.length === 0) return;
 
-            // Rellena con ceros si es necesario, pero procesa de inmediato.
             const codigoParaProcesar = codigoActual.length < 13
                 ? codigoActual.padStart(13, '0')
                 : codigoActual;
