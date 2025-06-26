@@ -30,9 +30,9 @@ interface ProgresoGuardado {
 
 // --- Configuraciones y Funciones de Carga ---
 const sucursalesConfig: { [key: string]: string } = {
-    'Mexico': 'ArticulosMexico', 'Econo1': 'ArticulosEcono1', 'Baja': 'ArticulosBaja',
-    'Sucursal4': 'ArticulosSucursal4', 'Sucursal5': 'ArticulosSucursal5',
-    'Sucursal6': 'ArticulosSucursal6', 'Sucursal7': 'ArticulosSucursal7',
+    'Mexico': 'ArticulosMexico', 'Econo1': 'ArticulosEcono1', 'Lolita': 'ArticulosLolita',
+    'LopezM': 'ArticulosLopezM', 'Madero': 'ArticulosMadero',
+    'Econo2': 'ArticulosEcono2', 'Sucursal7': 'ArticulosSucursal7',
 };
 
 const cargarArticulosSucursal = async (nombreSucursal: string): Promise<Articulo[]> => {
