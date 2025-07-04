@@ -98,7 +98,7 @@ const ReportesFarmacia: FunctionalComponent = () => {
         {activeTab === 'Ventas' && <div>Contenido de Ventas <VentasReport /></div>}
         {activeTab === 'Utilidad' && <div>Contenido de Ventas <Utilidadxdepto /></div>}
         {activeTab === 'Gastos' && <div>Contenido de Gastos <GastosAdmin /></div>}
-        {activeTab === 'Pedidos' && <div>Contenido de Seamanas<VentasSemanalesAgrupadas /> </></div>}
+        {activeTab === 'Pedidos' && <div>Contenido de Seamanas<VentasSemanalesAgrupadas /></div>}
         {activeTab === 'Facturas' && <div>Contenido de Facturas</div>}
         {activeTab === 'Salidas' && <div>Contenido de Salidas</div>}
         {activeTab === 'Comisiones' && <div>Contenido de Nomina <NominaManager /></div>}
