@@ -13,9 +13,9 @@ interface TableRow {
 
 const branches: string[] = ['KardexEcono1', 'KardexMexico', 'KardexMadero', 'KardexLopezM', 'KardexBaja', 'KardexEcono2', 'KardexLolita'];
 
-// --- NUEVAS Y MEJORADAS Funciones para manejo de semanas ---
+// --- LÓGICA DE SEMANAS CORREGIDA Y ROBUSTA ---
 
-// Función para obtener el número de semana ISO 8601
+// Función para obtener el número de semana ISO 8601 de una fecha.
 const getISOWeek = (date: Date): number => {
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
@@ -24,26 +24,40 @@ const getISOWeek = (date: Date): number => {
     return weekNo;
 };
 
-// Función robusta para obtener el LUNES (inicio) y VIERNES (fin) de una semana ISO
+/**
+ * Calcula las fechas de inicio (Lunes) y fin (Viernes) para una semana y año específicos.
+ * Esta es una versión corregida y más precisa que evita errores en los límites del año.
+ * @param year El año de la semana.
+ * @param week El número de la semana (1-53).
+ * @returns Un objeto con las fechas 'start' y 'end' en formato YYYY-MM-DD.
+ */
 const getWeekDatesForYear = (year: number, week: number): { start: string, end: string } => {
-    const simple = new Date(year, 0, 1 + (week - 1) * 7);
-    const dayOfWeek = simple.getDay();
-    const isoWeekStart = simple;
-    // Ajustar al lunes de esa semana
-    isoWeekStart.setDate(simple.getDate() - dayOfWeek + 1);
-    if (dayOfWeek === 0) { // Si el día calculado es Domingo, retroceder 6 días
-        isoWeekStart.setDate(simple.getDate() - 6);
-    }
-    const monday = new Date(isoWeekStart);
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
+    // La 4ta de Enero siempre está en la semana 1 del año.
+    const fourthOfJanuary = new Date(year, 0, 4);
+    const dayOfWeekOfFourth = fourthOfJanuary.getDay() || 7; // 1=Lunes, 7=Domingo
+
+    // Calculamos el Jueves de la semana 1
+    const thursdayOfWeek1 = new Date(year, 0, 4 - dayOfWeekOfFourth + 4);
+
+    // Calculamos el Jueves de la semana que nos interesa
+    const thursdayOfWeekN = new Date(thursdayOfWeek1);
+    thursdayOfWeekN.setDate(thursdayOfWeek1.getDate() + (week - 1) * 7);
+
+    // El Lunes es 3 días antes del Jueves
+    const monday = new Date(thursdayOfWeekN);
+    monday.setDate(thursdayOfWeekN.getDate() - 3);
+
+    // El Viernes es 1 día después del Jueves
+    const friday = new Date(thursdayOfWeekN);
+    friday.setDate(thursdayOfWeekN.getDate() + 1);
 
     const formatDate = (dt: Date) => dt.toISOString().split('T')[0];
     
     return { start: formatDate(monday), end: formatDate(friday) };
 };
 
-// Genera la lista de semanas para el selector
+
+// Genera la lista de semanas para el selector.
 const generateWeeksForYear = (year: number) => {
     const weeks = [];
     const today = new Date();
@@ -140,7 +154,6 @@ const DataTableVentas = () => {
   useEffect(() => {
     let dataToProcess = [...allData];
 
-    // 1. Filtrar por texto de búsqueda
     if (searchQuery) {
         const lowerCaseQuery = searchQuery.toLowerCase();
         dataToProcess = dataToProcess.filter(row =>
@@ -148,7 +161,6 @@ const DataTableVentas = () => {
         );
     }
     
-    // 2. Ordenar
     if (sortColumn) {
         dataToProcess.sort((a, b) => {
             const valA = a[sortColumn]; const valB = b[sortColumn];
@@ -162,7 +174,6 @@ const DataTableVentas = () => {
         });
     }
 
-    // 3. Paginar
     const newTotalPages = Math.ceil(dataToProcess.length / itemsPerPage);
     setTotalPages(newTotalPages > 0 ? newTotalPages : 1);
     const adjustedCurrentPage = (currentPage > newTotalPages && newTotalPages > 0) ? newTotalPages : currentPage;
@@ -187,7 +198,6 @@ const DataTableVentas = () => {
       <div class="ventas-report-container">
         <h2>Detalle de Ventas de Lunes a Viernes</h2>
 
-        {/* --- Controles de Filtro por Semana --- */}
         <div class="row g-2 mb-3 align-items-end filter-controls-row">
             <div class="col-6 col-md-3">
                 <label class="form-label form-label-sm">Año:</label>
@@ -251,7 +261,6 @@ const DataTableVentas = () => {
                 </tbody>
               </table>
             </div>
-            {/* --- Paginación --- */}
             {totalPages > 1 && (
                 <div class="pagination-controls d-flex justify-content-center align-items-center mt-3">
                     <button class="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</button>
