@@ -196,4 +196,23 @@ const ResumenVentasSemanales = () => {
                                         <td class="currency-cell">{summary.totalVentaNeta.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</td>
                                         <td class="currency-cell">{summary.totalCosto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</td>
                                         <td class={`currency-cell ${summary.totalUtilidad < 0 ? 'negative-utilidad' : ''}`}>
-                                            {summary.totalUtilidad.toLocaleString('es-MX', { style:
+                                            {summary.totalUtilidad.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={5} class="text-center p-4">No se encontraron datos de ventas para el año 2025 en la sucursal seleccionada.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    </>
+  );
+};
+
+export default ResumenVentasSemanales;
+// --- END OF FILE ResumenVentasSemanales.tsx ---
