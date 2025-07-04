@@ -1,8 +1,8 @@
 // --- START OF FILE ResumenVentasSemanales.tsx ---
 
-import { useState, useEffect, useCallback } from 'preact/hooks'; // CAMBIO CLAVE: Se importa useCallback
+import { useState, useEffect, useCallback } from 'preact/hooks';
 import { supabase } from '../utils/supabaseClient';
-import './VentasReport.css'; // Reutiliza el CSS existente
+import './VentasReport.css';
 import VentasCardsReport from './VentasCardsReport';
 import Gastos from './Gastos';
 
@@ -49,11 +49,9 @@ const ResumenVentasSemanales = () => {
   const appliedStartDate = '2025-01-01';
   const appliedEndDate = '2025-12-31';
 
-  // CAMBIO CLAVE: La función para actualizar los gastos se envuelve en useCallback.
-  // Esto asegura que la función no se recree en cada render, evitando bucles infinitos en el componente hijo `Gastos`.
   const handleExpensesCalculated = useCallback((expenses: number) => {
     setOperatingExpenses(expenses);
-  }, []); // El array vacío [] significa que la función nunca cambiará.
+  }, []);
 
   useEffect(() => {
     const fetchAndProcessData = async () => {
@@ -73,11 +71,22 @@ const ResumenVentasSemanales = () => {
             .eq('movto', '1')
         );
         
-        const results = await Promise.all(fetchPromises);
+        // **CAMBIO:** Usar Promise.allSettled para no detenerse si una sucursal falla.
+        const results = await Promise.allSettled(fetchPromises);
 
-        for (const result of results) {
-            if (result.error) throw result.error;
-            if (result.data) allSales = allSales.concat(result.data as TableRow[]);
+        results.forEach((result, index) => {
+            if (result.status === 'fulfilled' && result.value.data) {
+                allSales = allSales.concat(result.value.data as TableRow[]);
+            } else if (result.status === 'rejected') {
+                console.error(`Error al obtener datos de la sucursal ${branchesToFetch[index]}:`, result.reason);
+            }
+        });
+
+        // Si después de todo no hay ventas, no hay nada que procesar.
+        if (allSales.length === 0) {
+            setWeeklySummaries([]);
+            setLoading(false);
+            return;
         }
         
         const weeklyAggregates: {
@@ -91,7 +100,17 @@ const ResumenVentasSemanales = () => {
         } = {};
 
         for (const row of allSales) {
+            // **CAMBIO:** Añadir validación de fecha para evitar errores con datos incorrectos.
+            if (!row.fecha || typeof row.fecha !== 'string') {
+                console.warn('Registro ignorado: fecha faltante o inválida.', row);
+                continue;
+            }
             const date = new Date(row.fecha + 'T00:00:00');
+            if (isNaN(date.getTime())) {
+                console.warn('Registro ignorado: formato de fecha inválido.', row);
+                continue;
+            }
+
             const weekNum = getISOWeek(date);
 
             if (!weeklyAggregates[weekNum]) {
@@ -122,8 +141,9 @@ const ResumenVentasSemanales = () => {
         setWeeklySummaries(summaries);
 
       } catch (err: any) {
-        console.error("Error fetching or processing data:", err);
-        setError("Ocurrió un error al obtener o procesar los datos.");
+        // Este catch ahora es para errores inesperados, no para fallos de fetch individuales.
+        console.error("Error inesperado en el procesamiento:", err);
+        setError("Ocurrió un error inesperado al procesar los datos.");
       } finally {
         setLoading(false);
       }
@@ -135,7 +155,6 @@ const ResumenVentasSemanales = () => {
   return (
     <>
         <VentasCardsReport startDate={appliedStartDate} endDate={appliedEndDate} selectedBranch={selectedBranch} operatingExpenses={operatingExpenses} />
-        {/* CAMBIO CLAVE: Se pasa la función estable `handleExpensesCalculated` */}
         <Gastos startDate={appliedStartDate} endDate={appliedEndDate} selectedBranch={selectedBranch} onExpensesCalculated={handleExpensesCalculated} />
 
         <div class="ventas-report-container">
@@ -181,7 +200,7 @@ const ResumenVentasSemanales = () => {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={5} class="text-center p-4">No se encontraron datos de ventas para el año 2025.</td>
+                                    <td colSpan={5} class="text-center p-4">No se encontraron datos de ventas para el año 2025 en la sucursal seleccionada.</td>
                                 </tr>
                             )}
                         </tbody>
