@@ -6,13 +6,14 @@ import './VentasReport.css';
 import VentasCardsReport from './VentasCardsReport';
 import Gastos from './Gastos';
 
-// --- Interfaces, Constantes y Helpers ---
-interface TableRow {
+// **CAMBIO:** La interfaz ahora refleja los datos CRUDOS que vienen de la BD.
+interface RawSaleRow {
   fecha: string;
+  cantidad: number;
+  costo: number;
+  ppub: number;
   dscto: number;
-  costoTotal: number;
-  precioFinal: number;
-  utilidad: number;
+  movto: string;
 }
 
 interface WeeklySummary {
@@ -59,30 +60,29 @@ const ResumenVentasSemanales = () => {
       setError(null);
       
       const branchesToFetch = selectedBranch === 'General' ? branches : [selectedBranch];
-      let allSales: TableRow[] = [];
+      let allSales: RawSaleRow[] = [];
 
       try {
         const fetchPromises = branchesToFetch.map(branch =>
           supabase
             .from(branch)
-            .select('fecha, dscto, costoTotal, precioFinal, utilidad')
+            // **CAMBIO CRÍTICO:** Seleccionar las columnas que SÍ existen en la base de datos.
+            .select('fecha, cantidad, costo, ppub, dscto, movto')
             .gte('fecha', appliedStartDate)
             .lte('fecha', appliedEndDate)
             .eq('movto', '1')
         );
         
-        // **CAMBIO:** Usar Promise.allSettled para no detenerse si una sucursal falla.
         const results = await Promise.allSettled(fetchPromises);
 
-        results.forEach((result, index) => {
+        results.forEach((result) => {
             if (result.status === 'fulfilled' && result.value.data) {
-                allSales = allSales.concat(result.value.data as TableRow[]);
+                allSales = allSales.concat(result.value.data as RawSaleRow[]);
             } else if (result.status === 'rejected') {
-                console.error(`Error al obtener datos de la sucursal ${branchesToFetch[index]}:`, result.reason);
+                console.error(`Error al obtener datos de una sucursal:`, result.reason);
             }
         });
 
-        // Si después de todo no hay ventas, no hay nada que procesar.
         if (allSales.length === 0) {
             setWeeklySummaries([]);
             setLoading(false);
@@ -100,16 +100,9 @@ const ResumenVentasSemanales = () => {
         } = {};
 
         for (const row of allSales) {
-            // **CAMBIO:** Añadir validación de fecha para evitar errores con datos incorrectos.
-            if (!row.fecha || typeof row.fecha !== 'string') {
-                console.warn('Registro ignorado: fecha faltante o inválida.', row);
-                continue;
-            }
+            if (!row.fecha || typeof row.fecha !== 'string') continue;
             const date = new Date(row.fecha + 'T00:00:00');
-            if (isNaN(date.getTime())) {
-                console.warn('Registro ignorado: formato de fecha inválido.', row);
-                continue;
-            }
+            if (isNaN(date.getTime())) continue;
 
             const weekNum = getISOWeek(date);
 
@@ -119,9 +112,19 @@ const ResumenVentasSemanales = () => {
                     minDate: date, maxDate: date,
                 }
             }
-            weeklyAggregates[weekNum].ventaNeta += (row.precioFinal || 0) - (row.dscto || 0);
-            weeklyAggregates[weekNum].costo += row.costoTotal || 0;
-            weeklyAggregates[weekNum].utilidad += row.utilidad || 0;
+            
+            // **CAMBIO:** Calcular los totales a partir de los datos brutos.
+            const ventaBruta = (row.ppub || 0) * (row.cantidad || 0);
+            const costoTotal = (row.costo || 0) * (row.cantidad || 0);
+            const descuento = (row.dscto || 0);
+
+            const ventaNeta = ventaBruta - descuento;
+            const utilidad = ventaNeta - costoTotal;
+
+            weeklyAggregates[weekNum].ventaNeta += ventaNeta;
+            weeklyAggregates[weekNum].costo += costoTotal;
+            weeklyAggregates[weekNum].utilidad += utilidad;
+
             if (date < weeklyAggregates[weekNum].minDate) weeklyAggregates[weekNum].minDate = date;
             if (date > weeklyAggregates[weekNum].maxDate) weeklyAggregates[weekNum].maxDate = date;
         }
@@ -141,7 +144,6 @@ const ResumenVentasSemanales = () => {
         setWeeklySummaries(summaries);
 
       } catch (err: any) {
-        // Este catch ahora es para errores inesperados, no para fallos de fetch individuales.
         console.error("Error inesperado en el procesamiento:", err);
         setError("Ocurrió un error inesperado al procesar los datos.");
       } finally {
@@ -194,23 +196,4 @@ const ResumenVentasSemanales = () => {
                                         <td class="currency-cell">{summary.totalVentaNeta.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</td>
                                         <td class="currency-cell">{summary.totalCosto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</td>
                                         <td class={`currency-cell ${summary.totalUtilidad < 0 ? 'negative-utilidad' : ''}`}>
-                                            {summary.totalUtilidad.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={5} class="text-center p-4">No se encontraron datos de ventas para el año 2025 en la sucursal seleccionada.</td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-        </div>
-    </>
-  );
-};
-
-export default ResumenVentasSemanales;
-// --- END OF FILE ResumenVentasSemanales.tsx ---
+                                            {summary.totalUtilidad.toLocaleString('es-MX', { style:
