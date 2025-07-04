@@ -1,6 +1,6 @@
 // --- START OF FILE ResumenVentasSemanales.tsx ---
 
-import { useState, useEffect, useMemo } from 'preact/hooks';
+import { useState, useEffect, useCallback } from 'preact/hooks'; // CAMBIO CLAVE: Se importa useCallback
 import { supabase } from '../utils/supabaseClient';
 import './VentasReport.css'; // Reutiliza el CSS existente
 import VentasCardsReport from './VentasCardsReport';
@@ -25,7 +25,6 @@ interface WeeklySummary {
 
 const branches: string[] = ['KardexEcono1', 'KardexMexico', 'KardexMadero', 'KardexLopezM', 'KardexBaja', 'KardexEcono2', 'KardexLolita'];
 
-// Helper para calcular el número de semana ISO 8601
 const getISOWeek = (date: Date): number => {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
@@ -34,13 +33,11 @@ const getISOWeek = (date: Date): number => {
   return weekNo;
 };
 
-// Helper para formatear fechas como DD/MM
 const formatDate = (date: Date): string => {
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
     return `${day}/${month}`;
 }
-
 
 const ResumenVentasSemanales = () => {
   const [weeklySummaries, setWeeklySummaries] = useState<WeeklySummary[]>([]);
@@ -52,32 +49,37 @@ const ResumenVentasSemanales = () => {
   const appliedStartDate = '2025-01-01';
   const appliedEndDate = '2025-12-31';
 
-  // --- Effect para obtener y procesar los datos ---
+  // CAMBIO CLAVE: La función para actualizar los gastos se envuelve en useCallback.
+  // Esto asegura que la función no se recree en cada render, evitando bucles infinitos en el componente hijo `Gastos`.
+  const handleExpensesCalculated = useCallback((expenses: number) => {
+    setOperatingExpenses(expenses);
+  }, []); // El array vacío [] significa que la función nunca cambiará.
+
   useEffect(() => {
     const fetchAndProcessData = async () => {
       setLoading(true);
       setError(null);
-      setWeeklySummaries([]);
-
+      
       const branchesToFetch = selectedBranch === 'General' ? branches : [selectedBranch];
       let allSales: TableRow[] = [];
 
       try {
-        // 1. Obtener los datos de todas las sucursales
-        for (const branch of branchesToFetch) {
-          const { data, error: dbError } = await supabase
+        const fetchPromises = branchesToFetch.map(branch =>
+          supabase
             .from(branch)
             .select('fecha, dscto, costoTotal, precioFinal, utilidad')
-            .gte('fecha', `${appliedStartDate} 00:00:00`)
-            .lte('fecha', `${appliedEndDate} 23:59:59`)
+            .gte('fecha', appliedStartDate)
+            .lte('fecha', appliedEndDate)
             .eq('movto', '1')
-            .returns<TableRow[]>();
+        );
+        
+        const results = await Promise.all(fetchPromises);
 
-          if (dbError) throw dbError;
-          if (data) allSales = allSales.concat(data);
+        for (const result of results) {
+            if (result.error) throw result.error;
+            if (result.data) allSales = allSales.concat(result.data as TableRow[]);
         }
         
-        // 2. Agrupar los datos por semana y calcular totales
         const weeklyAggregates: {
             [weekNum: number]: {
                 ventaNeta: number;
@@ -94,24 +96,17 @@ const ResumenVentasSemanales = () => {
 
             if (!weeklyAggregates[weekNum]) {
                 weeklyAggregates[weekNum] = {
-                    ventaNeta: 0,
-                    costo: 0,
-                    utilidad: 0,
-                    minDate: date,
-                    maxDate: date,
+                    ventaNeta: 0, costo: 0, utilidad: 0,
+                    minDate: date, maxDate: date,
                 }
             }
-            // Sumar los valores
             weeklyAggregates[weekNum].ventaNeta += (row.precioFinal || 0) - (row.dscto || 0);
             weeklyAggregates[weekNum].costo += row.costoTotal || 0;
             weeklyAggregates[weekNum].utilidad += row.utilidad || 0;
-
-            // Actualizar el rango de fechas de la semana
             if (date < weeklyAggregates[weekNum].minDate) weeklyAggregates[weekNum].minDate = date;
             if (date > weeklyAggregates[weekNum].maxDate) weeklyAggregates[weekNum].maxDate = date;
         }
 
-        // 3. Formatear los datos agregados para la tabla final
         const summaries: WeeklySummary[] = Object.keys(weeklyAggregates).map(weekNumStr => {
             const weekNum = parseInt(weekNumStr);
             const data = weeklyAggregates[weekNum];
@@ -122,7 +117,7 @@ const ResumenVentasSemanales = () => {
                 totalCosto: data.costo,
                 totalUtilidad: data.utilidad,
             };
-        }).sort((a, b) => a.semana - b.semana); // Ordenar por número de semana
+        }).sort((a, b) => a.semana - b.semana);
 
         setWeeklySummaries(summaries);
 
@@ -137,12 +132,11 @@ const ResumenVentasSemanales = () => {
     fetchAndProcessData();
   }, [selectedBranch]);
 
-
   return (
     <>
-        {/* Los componentes de tarjetas y gastos se mantienen para dar un resumen anual total */}
         <VentasCardsReport startDate={appliedStartDate} endDate={appliedEndDate} selectedBranch={selectedBranch} operatingExpenses={operatingExpenses} />
-        <Gastos startDate={appliedStartDate} endDate={appliedEndDate} selectedBranch={selectedBranch} onExpensesCalculated={(exp) => setOperatingExpenses(exp)} />
+        {/* CAMBIO CLAVE: Se pasa la función estable `handleExpensesCalculated` */}
+        <Gastos startDate={appliedStartDate} endDate={appliedEndDate} selectedBranch={selectedBranch} onExpensesCalculated={handleExpensesCalculated} />
 
         <div class="ventas-report-container">
             <h2>Resumen de Ventas Semanales 2025</h2>
