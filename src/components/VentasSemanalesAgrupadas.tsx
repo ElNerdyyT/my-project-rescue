@@ -1,20 +1,21 @@
 // --- START OF FILE VentasReport.tsx ---
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks';
+import { useState, useEffect, useMemo, useCallback } from 'preact/hooks';
 import { supabase } from '../utils/supabaseClient';
 import './VentasReport.css';
 import VentasCardsReport from './VentasCardsReport';
 import Gastos from './Gastos';
 
-// --- Interfaces, Constantes y Helpers ---
+// --- Interfaces y Constantes ---
 interface TableRow {
   id?: number; articulo: string; fecha: string; tipo: string; movto: string; desc_movto: string; cantidad: number; costo: number; referencia: string; hora: string; nombre: string; turno: string; ppub: number; autonumber: number; fol: string; dscto: number; costoTotal: number; precioFinal: number; utilidad: number; sucursal: string;
 }
-type DayTypeFilter = 'all' | 'weekdays' | 'weekends';
 
 const branches: string[] = ['KardexEcono1', 'KardexMexico', 'KardexMadero', 'KardexLopezM', 'KardexBaja', 'KardexEcono2', 'KardexLolita'];
 
-// --- Funciones para manejo de semanas ---
+// --- NUEVAS Y MEJORADAS Funciones para manejo de semanas ---
+
+// Función para obtener el número de semana ISO 8601
 const getISOWeek = (date: Date): number => {
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
@@ -23,39 +24,44 @@ const getISOWeek = (date: Date): number => {
     return weekNo;
 };
 
-const getStartAndEndOfWeek = (year: number, week: number): { start: string, end: string } => {
-    const d = new Date(year, 0, 1 + (week - 1) * 7);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
-    const start = new Date(d.setDate(diff));
-    const end = new Date(d.setDate(diff + 6));
+// Función robusta para obtener el LUNES (inicio) y VIERNES (fin) de una semana ISO
+const getWeekDatesForYear = (year: number, week: number): { start: string, end: string } => {
+    const simple = new Date(year, 0, 1 + (week - 1) * 7);
+    const dayOfWeek = simple.getDay();
+    const isoWeekStart = simple;
+    // Ajustar al lunes de esa semana
+    isoWeekStart.setDate(simple.getDate() - dayOfWeek + 1);
+    if (dayOfWeek === 0) { // Si el día calculado es Domingo, retroceder 6 días
+        isoWeekStart.setDate(simple.getDate() - 6);
+    }
+    const monday = new Date(isoWeekStart);
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+
     const formatDate = (dt: Date) => dt.toISOString().split('T')[0];
-    return { start: formatDate(start), end: formatDate(end) };
+    
+    return { start: formatDate(monday), end: formatDate(friday) };
 };
 
+// Genera la lista de semanas para el selector
 const generateWeeksForYear = (year: number) => {
     const weeks = [];
     const today = new Date();
     const currentYear = today.getFullYear();
-    const lastWeek = (year === currentYear) ? getISOWeek(today) : 53;
+    // Una forma fiable de saber la última semana es viendo la semana del 28 de diciembre
+    const lastWeekOfYear = getISOWeek(new Date(year, 11, 28));
+    const lastWeek = (year === currentYear) ? getISOWeek(today) : lastWeekOfYear;
 
     for (let i = 1; i <= lastWeek; i++) {
-        const { start, end } = getStartAndEndOfWeek(year, i);
+        const { start, end } = getWeekDatesForYear(year, i);
         const formatDisplayDate = (dateStr: string) => {
-            const [y, m, d] = dateStr.split('-');
+            const [, m, d] = dateStr.split('-');
             return `${d}/${m}`;
         }
         weeks.push({
             value: i,
-            label: `Semana ${i}: ${formatDisplayDate(start)} - ${formatDisplayDate(end)}`
+            label: `Semana ${i} (${formatDisplayDate(start)} - ${formatDisplayDate(end)})`
         });
-    }
-    // Si el año no es el actual, puede que la semana 53 no exista, la removemos si es el caso.
-     if (year !== currentYear) {
-        const lastDayOfYear = new Date(year, 11, 31);
-        if (getISOWeek(lastDayOfYear) < 53) {
-            weeks.pop();
-        }
     }
     return weeks.reverse();
 };
@@ -81,20 +87,18 @@ const DataTableVentas = () => {
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
   const [selectedWeek, setSelectedWeek] = useState<number>(getISOWeek(today));
-  const [dayTypeFilter, setDayTypeFilter] = useState<DayTypeFilter>('all');
   
   const years = Array.from({ length: today.getFullYear() - 2020 + 1 }, (_, i) => 2020 + i).reverse();
   const weeksInYear = useMemo(() => generateWeeksForYear(selectedYear), [selectedYear]);
 
   // --- Effects ---
 
-  // Efecto para establecer las fechas cuando cambia la semana o el año
+  // Efecto para establecer las fechas (Lunes a Viernes) cuando cambia la semana o el año
   useEffect(() => {
-    const { start, end } = getStartAndEndOfWeek(selectedYear, selectedWeek);
+    const { start, end } = getWeekDatesForYear(selectedYear, selectedWeek);
     setAppliedStartDate(start);
     setAppliedEndDate(end);
   }, [selectedYear, selectedWeek]);
-
 
   // Efecto para obtener los datos de la BD
   useEffect(() => {
@@ -127,26 +131,16 @@ const DataTableVentas = () => {
         if (res.status === 'fulfilled') combinedData = combinedData.concat(res.value);
       });
       setAllData(combinedData);
-      // El loading se pone en false en el siguiente efecto
     };
 
     fetchAllData();
   }, [appliedStartDate, appliedEndDate, selectedBranch]);
 
-  // Efecto para filtrar (por tipo de día y búsqueda), ordenar y paginar
+  // Efecto para filtrar, ordenar y paginar
   useEffect(() => {
     let dataToProcess = [...allData];
 
-    // 1. Filtrar por tipo de día (L-V o S-D)
-    if (dayTypeFilter !== 'all') {
-        dataToProcess = dataToProcess.filter(row => {
-            const dayOfWeek = new Date(row.fecha + 'T00:00:00').getDay();
-            const isWeekend = dayOfWeek === 6 || dayOfWeek === 0; // Sábado=6, Domingo=0
-            return dayTypeFilter === 'weekends' ? isWeekend : !isWeekend;
-        });
-    }
-
-    // 2. Filtrar por texto de búsqueda
+    // 1. Filtrar por texto de búsqueda
     if (searchQuery) {
         const lowerCaseQuery = searchQuery.toLowerCase();
         dataToProcess = dataToProcess.filter(row =>
@@ -154,7 +148,7 @@ const DataTableVentas = () => {
         );
     }
     
-    // 3. Ordenar
+    // 2. Ordenar
     if (sortColumn) {
         dataToProcess.sort((a, b) => {
             const valA = a[sortColumn]; const valB = b[sortColumn];
@@ -168,7 +162,7 @@ const DataTableVentas = () => {
         });
     }
 
-    // 4. Paginar
+    // 3. Paginar
     const newTotalPages = Math.ceil(dataToProcess.length / itemsPerPage);
     setTotalPages(newTotalPages > 0 ? newTotalPages : 1);
     const adjustedCurrentPage = (currentPage > newTotalPages && newTotalPages > 0) ? newTotalPages : currentPage;
@@ -176,8 +170,8 @@ const DataTableVentas = () => {
     setFilteredData(dataToProcess.slice(startIndex, startIndex + itemsPerPage));
     if (currentPage !== adjustedCurrentPage) setCurrentPage(adjustedCurrentPage);
     
-    setLoading(false); // Se finaliza la carga aquí
-  }, [allData, searchQuery, dayTypeFilter, sortColumn, sortDirection, currentPage, itemsPerPage]);
+    setLoading(false);
+  }, [allData, searchQuery, sortColumn, sortDirection, currentPage, itemsPerPage]);
 
   // --- Handlers ---
   const handleSort = (column: keyof TableRow) => { setSortColumn(column); setSortDirection(prev => (sortColumn === column && prev === 'asc') ? 'desc' : 'asc'); };
@@ -191,29 +185,21 @@ const DataTableVentas = () => {
       <Gastos startDate={appliedStartDate} endDate={appliedEndDate} selectedBranch={selectedBranch} onExpensesCalculated={handleExpensesCalculated} />
 
       <div class="ventas-report-container">
-        <h2>Detalle de Ventas</h2>
+        <h2>Detalle de Ventas de Lunes a Viernes</h2>
 
-        {/* --- Nuevos Controles de Filtro --- */}
+        {/* --- Controles de Filtro por Semana --- */}
         <div class="row g-2 mb-3 align-items-end filter-controls-row">
-            <div class="col-6 col-md-2">
+            <div class="col-6 col-md-3">
                 <label class="form-label form-label-sm">Año:</label>
                 <select class="form-select form-select-sm" value={selectedYear} onChange={handleYearChange} disabled={loading}>
                     {years.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
             </div>
-            <div class="col-6 col-md-3">
-                <label class="form-label form-label-sm">Semana:</label>
+            <div class="col-6 col-md-4">
+                <label class="form-label form-label-sm">Semana (Lunes a Viernes):</label>
                 <select class="form-select form-select-sm" value={selectedWeek} onChange={handleWeekChange} disabled={loading}>
                     {weeksInYear.map(w => <option key={w.value} value={w.value}>{w.label}</option>)}
                 </select>
-            </div>
-            <div class="col-12 col-md-3">
-                <label class="form-label form-label-sm">Filtrar Días:</label>
-                <div class="btn-group btn-group-sm w-100">
-                    <button type="button" class={`btn ${dayTypeFilter === 'all' ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setDayTypeFilter('all')}>Todos</button>
-                    <button type="button" class={`btn ${dayTypeFilter === 'weekdays' ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setDayTypeFilter('weekdays')}>L-V</button>
-                    <button type="button" class={`btn ${dayTypeFilter === 'weekends' ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setDayTypeFilter('weekends')}>S-D</button>
-                </div>
             </div>
              <div class="col-6 col-md-2">
                 <label htmlFor="branch-select" class="form-label form-label-sm">Sucursal:</label>
@@ -222,9 +208,9 @@ const DataTableVentas = () => {
                     {branches.map((branch) => (<option key={branch} value={branch}>{branch.replace('Kardex', '')}</option>))}
                 </select>
             </div>
-            <div class="col-6 col-md-2">
+            <div class="col-6 col-md-3">
                 <label htmlFor="search-input" class="form-label form-label-sm">Buscar:</label>
-                <input type="search" id="search-input" class="form-control form-control-sm" placeholder="Buscar..." value={searchQuery} onInput={(e) => setSearchQuery((e.target as HTMLInputElement).value)} disabled={loading}/>
+                <input type="search" id="search-input" class="form-control form-control-sm" placeholder="Buscar en la semana..." value={searchQuery} onInput={(e) => setSearchQuery((e.target as HTMLInputElement).value)} disabled={loading}/>
             </div>
         </div>
 
