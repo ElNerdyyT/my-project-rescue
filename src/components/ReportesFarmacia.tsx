@@ -4,6 +4,8 @@ import VentasReport from './VentasReport';
 import GastosAdmin from './GastosAdmin';
 import NominaManager from './NominaManager';
 import Utilidadxdepto from './Utilidadxdepto';
+import VentasSemanalesAgrupadas from './VentasSemanalesAgrupadas';
+
 
 
 const ReportesFarmacia: FunctionalComponent = () => {
@@ -96,7 +98,7 @@ const ReportesFarmacia: FunctionalComponent = () => {
         {activeTab === 'Ventas' && <div>Contenido de Ventas <VentasReport /></div>}
         {activeTab === 'Utilidad' && <div>Contenido de Ventas <Utilidadxdepto /></div>}
         {activeTab === 'Gastos' && <div>Contenido de Gastos <GastosAdmin /></div>}
-        {activeTab === 'Pedidos' && <div>Contenido de Pedidos</div>}
+        {activeTab === 'Pedidos' && <div>Contenido de Seamanas<VentasSemanalesAgrupadas /> </></div>}
         {activeTab === 'Facturas' && <div>Contenido de Facturas</div>}
         {activeTab === 'Salidas' && <div>Contenido de Salidas</div>}
         {activeTab === 'Comisiones' && <div>Contenido de Nomina <NominaManager /></div>}
