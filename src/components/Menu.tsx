@@ -17,6 +17,7 @@ import Articulos from '../pages/Articulos';
 import Reportes from '../pages/Reportes';
 import Ajustes from '../pages/Ajustes';
 import PedidosInteligentes from '../pages/PedidosInteligentes';
+import PedidosInteligentesSustancia from '../pages/PedidosInteligentesSustancia';
 import HojaCorte from '../pages/HojaCorte';
 import Traspasos from '../pages/Traspasos';
 import Facturas from '../pages/Facturas';
@@ -187,6 +188,12 @@ const Menu: FunctionalComponent = () => {
                 <span>Pedidos Inteligente</span>
               </a>
             </li>
+            <li className="menu-item">
+              <a href="/reportes/pedidos-inteligentes-sustancia" onClick={(e) => { e.preventDefault(); handleNav('/reportes/pedidos-inteligentes-sustancia'); }} className="menu-link">
+                <span className="menu-icon">💡</span> {/* Changed icon */}
+                <span>Pedidos Sustancia</span>
+              </a>
+            </li>
           </ul>
         </div>
 
@@ -241,6 +248,7 @@ const Menu: FunctionalComponent = () => {
           <Route path="/reportes/traspasos" component={Traspasos} />
           <Route path="/reportes/negativos" component={Negativos} />
           <Route path="/reportes/pedidos-inteligentes" component={PedidosInteligentes} />
+          <Route path="/reportes/pedidos-inteligentes-sustancia" component={PedidosInteligentesSustancia} />
           {/* Main Ajustes page */}
           <Route path="/ajustes" component={Ajustes} />
 
