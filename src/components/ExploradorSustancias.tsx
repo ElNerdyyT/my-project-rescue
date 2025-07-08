@@ -1,5 +1,6 @@
 import { h } from 'preact';
 import { useState, useEffect, useMemo, useCallback } from 'preact/hooks';
+import { createPortal } from 'preact/compat';
 import { supabase } from '../utils/supabaseClient';
 
 // --- TIPOS DE DATOS ---
@@ -57,13 +58,27 @@ const NOMBRE_INVALIDO = 'POR DEFINIR';
 
 // --- COMPONENTES AUXILIARES ---
 
+// Portal para el Modal
+const Portal = ({ children }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+  return mounted ? createPortal(children, document.body) : null;
+};
+
 // Skeleton para la tabla principal
 const TableSkeleton = () => (
-  <div class="space-y-2 p-4">
+  <tbody>
     {[...Array(10)].map((_, i) => (
-      <div key={i} class="h-12 bg-slate-200 rounded animate-pulse"></div>
+      <tr key={i}>
+        <td colSpan={2} class="p-2">
+            <div class="h-12 bg-slate-200 rounded animate-pulse"></div>
+        </td>
+      </tr>
     ))}
-  </div>
+  </tbody>
 );
 
 // Skeleton para el contenido del modal
@@ -343,138 +358,141 @@ const ExploradorSustancias = () => {
                 </th>
               </tr>
             </thead>
-            <tbody>
-              {loading && <TableSkeleton />}
-              {!loading && error && (
-                <tr>
-                  <td colSpan={2} class="text-center p-8">
-                    <div class="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>
-                  </td>
-                </tr>
-              )}
-              {!loading && !error && filteredAndSortedSustancias.map((sustancia) => (
-                <tr
-                  key={sustancia.nombre}
-                  class="border-b border-slate-200 hover:bg-indigo-50 transition-colors duration-150 cursor-pointer"
-                  onClick={() => openModalWithSustancia(sustancia.nombre)}
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === 'Enter' && openModalWithSustancia(sustancia.nombre)}
-                >
-                  <td class="p-4 text-slate-800 font-medium">{sustancia.nombre}</td>
-                  <td class="p-4 text-slate-600 text-right font-mono text-lg">{sustancia.stockTotal}</td>
-                </tr>
-              ))}
-              {!loading && filteredAndSortedSustancias.length === 0 && (
-                 <tr>
-                    <td colSpan={2} class="text-center p-8 text-slate-500">No se encontraron sustancias que coincidan.</td>
-                 </tr>
-              )}
-            </tbody>
+            
+            {loading ? <TableSkeleton /> : (
+              <tbody>
+                {error && (
+                  <tr>
+                    <td colSpan={2} class="text-center p-8">
+                      <div class="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>
+                    </td>
+                  </tr>
+                )}
+                {!error && filteredAndSortedSustancias.map((sustancia) => (
+                  <tr
+                    key={sustancia.nombre}
+                    class="border-b border-slate-200 hover:bg-indigo-50 transition-colors duration-150 cursor-pointer"
+                    onClick={() => openModalWithSustancia(sustancia.nombre)}
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === 'Enter' && openModalWithSustancia(sustancia.nombre)}
+                  >
+                    <td class="p-4 text-slate-800 font-medium">{sustancia.nombre}</td>
+                    <td class="p-4 text-slate-600 text-right font-mono text-lg">{sustancia.stockTotal}</td>
+                  </tr>
+                ))}
+                {!error && filteredAndSortedSustancias.length === 0 && (
+                   <tr>
+                      <td colSpan={2} class="text-center p-8 text-slate-500">No se encontraron sustancias que coincidan.</td>
+                   </tr>
+                )}
+              </tbody>
+            )}
           </table>
         </div>
       </div>
       
-      {/* --- MODAL FLOTANTE --- */}
-      {modalOpen && (
-        <div 
-          class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fade-in"
-          onClick={closeModal}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-title"
-        >
+      <Portal>
+        {modalOpen && (
           <div 
-            class="bg-slate-50 rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col m-4 transform animate-scale-in"
-            onClick={(e) => e.stopPropagation()}
+            class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fade-in"
+            onClick={closeModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-title"
           >
-            <header class="p-4 border-b border-slate-200 flex justify-between items-center flex-shrink-0">
-              <div>
-                <h2 id="modal-title" class="text-xl font-bold text-indigo-700">Detalles de la Sustancia</h2>
-                <p class="text-slate-800 font-semibold">{selectedSustancia}</p>
-              </div>
-              <button onClick={closeModal} class="p-2 rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-all text-2xl" aria-label="Cerrar modal">&times;</button>
-            </header>
-            
-            <main class="p-6 overflow-y-auto flex-grow">
-              {loadingModal && <ModalSkeleton />}
-              {modalError && <div class="text-center p-8 text-red-500 bg-red-100 rounded-lg">{modalError}</div>}
+            <div 
+              class="bg-slate-50 rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col m-4 transform animate-scale-in"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <header class="p-4 border-b border-slate-200 flex justify-between items-center flex-shrink-0">
+                <div>
+                  <h2 id="modal-title" class="text-xl font-bold text-indigo-700">Detalles de la Sustancia</h2>
+                  <p class="text-slate-800 font-semibold">{selectedSustancia}</p>
+                </div>
+                <button onClick={closeModal} class="p-2 rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-all text-2xl" aria-label="Cerrar modal">&times;</button>
+              </header>
               
-              {!loadingModal && !modalError && (
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-8">
-                  <div class="md:col-span-2 space-y-4">
-                    <h3 class="text-lg font-semibold text-slate-700 border-b pb-2">Productos Comerciales</h3>
-                    {productosDetallados.length > 0 ? (
-                      productosDetallados.map((prod) => (
-                        <div key={prod.nombre_comer_a} class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                           <p class="font-bold text-slate-800">{prod.nombre_comer_a}</p>
-                           <p class="text-sm text-slate-500">{prod.depto_a} / {prod.subdepto_a}</p>
-                           <div class="mt-4 text-xs space-y-1">
-                             <h4 class="font-semibold mb-2 text-slate-600">Inventario por Sucursal:</h4>
-                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
-                               {NOMBRES_SUCURSALES.map(sucursal => (
-                                   <div key={sucursal} class="flex justify-between items-center border-b border-dotted">
-                                       <span class="text-slate-600">{sucursal.replace('Articulos', '')}:</span>
-                                       <span class={`font-mono font-bold ${prod.inventarioPorSucursal[sucursal] ? 'text-indigo-600' : 'text-slate-400'}`}>
-                                          {prod.inventarioPorSucursal[sucursal]?.cantidad ?? 0}
-                                       </span>
-                                   </div>
-                               ))}
+              <main class="p-6 overflow-y-auto flex-grow">
+                {loadingModal && <ModalSkeleton />}
+                {modalError && <div class="text-center p-8 text-red-500 bg-red-100 rounded-lg">{modalError}</div>}
+                
+                {!loadingModal && !modalError && (
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-8">
+                    <div class="md:col-span-2 space-y-4">
+                      <h3 class="text-lg font-semibold text-slate-700 border-b pb-2">Productos Comerciales</h3>
+                      {productosDetallados.length > 0 ? (
+                        productosDetallados.map((prod) => (
+                          <div key={prod.nombre_comer_a} class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                             <p class="font-bold text-slate-800">{prod.nombre_comer_a}</p>
+                             <p class="text-sm text-slate-500">{prod.depto_a} / {prod.subdepto_a}</p>
+                             <div class="mt-4 text-xs space-y-1">
+                               <h4 class="font-semibold mb-2 text-slate-600">Inventario por Sucursal:</h4>
+                               <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
+                                 {NOMBRES_SUCURSALES.map(sucursal => (
+                                     <div key={sucursal} class="flex justify-between items-center border-b border-dotted">
+                                         <span class="text-slate-600">{sucursal.replace('Articulos', '')}:</span>
+                                         <span class={`font-mono font-bold ${prod.inventarioPorSucursal[sucursal] ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                            {prod.inventarioPorSucursal[sucursal]?.cantidad ?? 0}
+                                         </span>
+                                     </div>
+                                 ))}
+                               </div>
                              </div>
-                           </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div class="text-center p-6 bg-slate-100 rounded-lg text-slate-500">
-                        No se encontraron productos comerciales para esta sustancia.
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div>
-                    <div class="sticky top-0">
-                        <h3 class="text-lg font-semibold text-slate-700 border-b pb-2 mb-4">Relacionados</h3>
-                        <button
-                            onClick={() => findRelatedSustancias(selectedSustancia!)}
-                            class="w-full mb-4 text-sm bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 transition shadow-sm active:scale-95"
-                        >
-                          Buscar Presentaciones Relacionadas
-                        </button>
-                        {sustanciasRelacionadas.length > 0 ? (
-                          <ul class="space-y-1">
-                            {sustanciasRelacionadas.map(rel => (
-                              <li key={rel}>
-                                <button 
-                                    onClick={() => openModalWithSustancia(rel)}
-                                    class="w-full text-left text-sm text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100 p-2 rounded-md transition-colors"
-                                >
-                                  {rel}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <div class="text-xs text-slate-500 text-center p-4 bg-slate-100 rounded-md">
-                            No se encontraron otras presentaciones.
                           </div>
-                        )}
+                        ))
+                      ) : (
+                        <div class="text-center p-6 bg-slate-100 rounded-lg text-slate-500">
+                          No se encontraron productos comerciales para esta sustancia.
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <div class="sticky top-0">
+                          <h3 class="text-lg font-semibold text-slate-700 border-b pb-2 mb-4">Relacionados</h3>
+                          <button
+                              onClick={() => findRelatedSustancias(selectedSustancia!)}
+                              class="w-full mb-4 text-sm bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 transition shadow-sm active:scale-95"
+                          >
+                            Buscar Presentaciones Relacionadas
+                          </button>
+                          {sustanciasRelacionadas.length > 0 ? (
+                            <ul class="space-y-1">
+                              {sustanciasRelacionadas.map(rel => (
+                                <li key={rel}>
+                                  <button 
+                                      onClick={() => openModalWithSustancia(rel)}
+                                      class="w-full text-left text-sm text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100 p-2 rounded-md transition-colors"
+                                  >
+                                    {rel}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div class="text-xs text-slate-500 text-center p-4 bg-slate-100 rounded-md">
+                              No se encontraron otras presentaciones.
+                            </div>
+                          )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </main>
+                )}
+              </main>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Portal>
     </div>
   );
 };
 
 export default ExploradorSustancias;
 
-// Nota: Agrega las animaciones a tu archivo tailwind.config.js.
-// El `animate-pulse` ya viene con Tailwind, solo necesitas `fade-in` y `scale-in`.
 /*
-  // tailwind.config.js
+  tailwind.config.js
+  Asegúrate de tener estas animaciones para que el modal aparezca suavemente.
+
   theme: {
     extend: {
       animation: {
