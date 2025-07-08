@@ -4,6 +4,8 @@ import { FunctionalComponent } from 'preact';
 import PageLayout from '../components/PageLayout';
 // 1. La importación y el nombre del componente deben empezar con mayúscula (PascalCase)
 import SustanciasEditor from '../components/sustanciasEditor';
+import ExploradorSustancias from '../components/ExploradorSustancias';
+
 
 // 2. El nombre del componente debe coincidir con lo que se exporta
 const Sustancias: FunctionalComponent = () => {
@@ -14,6 +16,8 @@ const Sustancias: FunctionalComponent = () => {
     >
       {/* 3. Al usar el componente en JSX, también debe empezar con mayúscula */}
       <SustanciasEditor />
+            <SustanciasEditor />
+            <ExploradorSustancias />
     </PageLayout>
   );
 };
