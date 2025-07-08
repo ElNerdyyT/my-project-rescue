@@ -3,7 +3,7 @@
 import { FunctionalComponent } from 'preact';
 import PageLayout from '../components/PageLayout';
 // 1. La importación y el nombre del componente deben empezar con mayúscula (PascalCase)
-import SustanciasEditor from '../components/sustanciasEditor';
+import SustanciasEditor from '../components/SustanciasEditor';
 import ExploradorSustancias from '../components/ExploradorSustancias';
 
 
