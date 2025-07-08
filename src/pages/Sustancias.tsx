@@ -1,16 +1,22 @@
+// pages/Sustancias.tsx
+
 import { FunctionalComponent } from 'preact';
 import PageLayout from '../components/PageLayout';
-import sustanciasEditor from '../components/sustanciasEditor';
+// 1. La importación y el nombre del componente deben empezar con mayúscula (PascalCase)
+import SustanciasEditor from '../components/sustanciasEditor';
 
-const Ajustes: FunctionalComponent = () => {
+// 2. El nombre del componente debe coincidir con lo que se exporta
+const Sustancias: FunctionalComponent = () => {
   return (
     <PageLayout
-      title="Sustancias"
-      description="Bienvenido al panel sustancias."
+      title="Editor de Sustancias"
+      description="Utilice esta herramienta para definir la sustancia activa de los productos."
     >
-        <sustanciasEditor />
+      {/* 3. Al usar el componente en JSX, también debe empezar con mayúscula */}
+      <SustanciasEditor />
     </PageLayout>
   );
 };
 
+// 4. El export default ahora coincide con el nombre del componente definido arriba
 export default Sustancias;
