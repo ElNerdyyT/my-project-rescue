@@ -16,8 +16,7 @@ const Sustancias: FunctionalComponent = () => {
     >
       {/* 3. Al usar el componente en JSX, también debe empezar con mayúscula */}
       <SustanciasEditor />
-            <SustanciasEditor />
-            <ExploradorSustancias />
+      <ExploradorSustancias />
     </PageLayout>
   );
 };
