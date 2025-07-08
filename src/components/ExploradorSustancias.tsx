@@ -96,8 +96,8 @@ const ExploradorSustancias = () => {
       })
       .filter(s => s.nombre.toLowerCase().includes(busqueda.toLowerCase()))
       .sort((a, b) => {
-        const valA = orden.columna === 'nombre' ? a.nombre : a.stockTotal;
-        const valB = orden.columna === 'nombre' ? b.nombre : b.stockTotal;
+        const valA = orden.columna === 'nombre' ? a.nombre.toLowerCase() : a.stockTotal;
+        const valB = orden.columna === 'nombre' ? b.nombre.toLowerCase() : b.stockTotal;
         
         if (valA < valB) return orden.dir === 'asc' ? -1 : 1;
         if (valA > valB) return orden.dir === 'asc' ? 1 : -1;
@@ -242,18 +242,30 @@ const ExploradorSustancias = () => {
         </div>
       </div>
 
-      {/* --- MODAL --- */}
+      {/* --- MODAL (CON ESTILOS EN LÍNEA PARA ARREGLAR POSICIONAMIENTO) --- */}
       {modalState.isOpen && modalState.sustancia && (
-        <div class="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4 transition-opacity" onClick={() => setModalState(prev => ({...prev, isOpen: false}))}>
-          <div class="bg-gray-100 rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div 
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)', zIndex: 50,
+            display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem'
+          }}
+          onClick={() => setModalState({ ...modalState, isOpen: false })}
+        >
+          <div 
+            class="bg-gray-100 rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col" 
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
             <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white rounded-t-lg">
               <div>
                   <h3 class="text-xl font-bold text-gray-900">{modalState.sustancia.nombre}</h3>
                   <p class="text-sm text-gray-600">Cantidad Total General: <span class="font-bold text-lg text-green-700">{modalState.sustancia.stockTotal}</span></p>
               </div>
-              <button onClick={() => setModalState(prev => ({...prev, isOpen: false}))} class="text-gray-400 hover:text-gray-800 text-3xl font-bold">&times;</button>
+              <button onClick={() => setModalState({ ...modalState, isOpen: false })} class="text-gray-400 hover:text-gray-800 text-3xl font-bold">&times;</button>
             </div>
             
+            {/* Modal Body */}
             <div class="p-6 overflow-y-auto">
               {modalState.isLoading ? (
                 <div class="text-center p-8">Cargando detalles...</div>
@@ -274,13 +286,14 @@ const ExploradorSustancias = () => {
               )}
             </div>
             
+            {/* Modal Footer con Sustancias Relacionadas */}
             <div class="px-6 pt-4 pb-6 border-t bg-white rounded-b-lg">
-                <button onClick={() => handleVerRelacionadas(modalState.sustancia!.nombre)} class="bg-blue-100 text-blue-800 text-sm font-semibold px-4 py-2 rounded-md hover:bg-blue-200" disabled={modalState.isLoadingRelacionadas}>
+                <button onClick={() => handleVerRelacionadas(modalState.sustancia!.nombre)} class="bg-blue-100 text-blue-800 text-sm font-semibold px-4 py-2 rounded-md hover:bg-blue-200 disabled:opacity-50" disabled={modalState.isLoadingRelacionadas}>
                   {modalState.isLoadingRelacionadas ? 'Buscando...' : 'Ver Presentaciones Relacionadas'}
                 </button>
                 {modalState.relacionadas.length > 0 && (
-                  <div class="mt-4 space-y-2">
-                    <h4 class="font-bold text-sm">Otras presentaciones:</h4>
+                  <div class="mt-4">
+                    <h4 class="font-bold text-sm mb-2">Otras presentaciones:</h4>
                     <div class="flex flex-wrap gap-2">
                       {modalState.relacionadas.map(rel => (
                         <button key={rel.nombre} onClick={() => handleAbrirModal(rel)} class="bg-gray-200 text-gray-800 text-xs px-3 py-1 rounded-full hover:bg-gray-300">
