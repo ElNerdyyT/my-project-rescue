@@ -197,7 +197,7 @@ const Menu: FunctionalComponent = () => {
               </a>
             </li>
             <li className="menu-item">
-              <a href="/reportes/pedidos-inteligentes-sustancia" onClick={(e) => { e.preventDefault(); handleNav('/sustancias'); }} className="menu-link">
+              <a href="/sustancias" onClick={(e) => { e.preventDefault(); handleNav('/sustancias'); }} className="menu-link">
                 <span className="menu-icon">💡</span> {/* Changed icon */}
                 <span>Sustancia</span>
               </a>
