@@ -25,6 +25,8 @@ import Negativos from '../pages/Negativos';
 import Existencias from '../pages/Existencias';
 import Nomina from '../pages/Nomina';
 import Inventario from '../pages/Inventario';
+import Sustancias from '../pages/Sustancias';
+
 
 
 const Menu: FunctionalComponent = () => {
@@ -194,6 +196,12 @@ const Menu: FunctionalComponent = () => {
                 <span>Pedidos Sustancia</span>
               </a>
             </li>
+            <li className="menu-item">
+              <a href="/reportes/pedidos-inteligentes-sustancia" onClick={(e) => { e.preventDefault(); handleNav('/sustancias'); }} className="menu-link">
+                <span className="menu-icon">💡</span> {/* Changed icon */}
+                <span>Sustancia</span>
+              </a>
+            </li>
           </ul>
         </div>
 
@@ -251,6 +259,7 @@ const Menu: FunctionalComponent = () => {
           <Route path="/reportes/pedidos-inteligentes-sustancia" component={PedidosInteligentesSustancia} />
           {/* Main Ajustes page */}
           <Route path="/ajustes" component={Ajustes} />
+          <Route path="/sustancias" component={Sustancias} />
 
            {/* Add a default route or 404 handler if needed */}
            {/* <NotFound default /> */}
