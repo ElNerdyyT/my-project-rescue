@@ -82,7 +82,7 @@ const DataTableVentas = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBranch, setSelectedBranch] = useState<string>('General');
 
-  // 🔴 Nuevo estado para Turno
+  // Nuevo estado para Turno
   const [selectedTurno, setSelectedTurno] = useState<string>('Todos');
 
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -184,7 +184,7 @@ const DataTableVentas = () => {
     return () => {
       isMounted = false;
     };
-  }, []); // Removed initial date parts from dependencies
+  }, []);
 
   // Effect 2: Apply initial dates ONCE dropdowns are populated
   useEffect(() => {
@@ -237,7 +237,9 @@ const DataTableVentas = () => {
         const ppub = safeParseFloatAndRound(item.ppub);
         const dscto = safeParseFloatAndRound(item.dscto);
         const costoTotal = safeParseFloatAndRound(cantidad * costo);
-        const precioFinal = safeParseFloatAndRound(cantidad * ppub); // qty * ppub
+        const precioFinal = safeParseFloatAndRound(
+          cantidad * ppub
+        ); // qty * ppub
         const utilidad = safeParseFloatAndRound(
           precioFinal - costoTotal - dscto
         ); // recalc utilidad
@@ -250,22 +252,30 @@ const DataTableVentas = () => {
               ? new Date(item.hora)
               : new Date(`1970-01-01T${item.hora}`);
             if (!isNaN(dateWithTime.getTime())) {
-              formattedHora = dateWithTime.toLocaleTimeString('es-MX', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-              });
+              formattedHora = dateWithTime.toLocaleTimeString(
+                'es-MX',
+                {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false
+                }
+              );
             }
           } catch (timeError) {
-            console.warn(`Could not parse time: ${item.hora}`, timeError);
+            console.warn(
+              `Could not parse time: ${item.hora}`,
+              timeError
+            );
           }
         }
 
         return {
           id: Number(item.id || 0),
           articulo: String(item.articulo || ''),
-          fecha: item.fecha ? String(item.fecha).split('T')[0] : 'N/A', // Keep only date part
+          fecha: item.fecha
+            ? String(item.fecha).split('T')[0]
+            : 'N/A', // Keep only date part
           tipo: String(item.tipo || ''),
           movto: String(item.movto || ''),
           desc_movto: String(item.desc_movto || ''),
@@ -286,7 +296,10 @@ const DataTableVentas = () => {
         };
       });
     } catch (err: any) {
-      console.error(`Error fetching TABLE data from ${branch}:`, err.message);
+      console.error(
+        `Error fetching TABLE data from ${branch}:`,
+        err.message
+      );
       setError(`Error getting TABLE data from ${branch}.`);
       return [];
     }
@@ -329,7 +342,11 @@ const DataTableVentas = () => {
 
       try {
         const promises = branchesToFetch.map((branch) =>
-          fetchDataFromBranch(branch, formattedStartDate, formattedEndDate)
+          fetchDataFromBranch(
+            branch,
+            formattedStartDate,
+            formattedEndDate
+          )
         );
         const results = await Promise.allSettled(promises);
 
@@ -360,7 +377,9 @@ const DataTableVentas = () => {
           'VentasReport: General error during TABLE data fetch:',
           err
         );
-        setError('Ocurrió un error general al obtener los datos de la tabla.');
+        setError(
+          'Ocurrió un error general al obtener los datos de la tabla.'
+        );
         setAllData([]);
       } finally {
         // loading will be set to false in Effect 4
@@ -386,17 +405,18 @@ const DataTableVentas = () => {
 
     let dataToProcess = [...allData];
 
-    // 1. Apply Search Filter
+    // 1. Apply Text Search Filter
     if (searchQuery) {
       const lowerCaseQuery = searchQuery.toLowerCase();
       dataToProcess = dataToProcess.filter((row) =>
         Object.values(row).some((value) =>
-          value?.toString().toLowerCase().includes(lowerCaseQuery) ?? false
+          value?.toString().toLowerCase().includes(lowerCaseQuery) ??
+          false
         )
       );
     }
 
-    // 1.5 Apply Turno Filter (nuevo)
+    // 1.5 Apply Turno Filter
     if (selectedTurno !== 'Todos') {
       dataToProcess = dataToProcess.filter(
         (row) => row.turno === selectedTurno
@@ -420,9 +440,14 @@ const DataTableVentas = () => {
             b.hora !== 'N/A'
           ) {
             try {
-              const dtA = new Date(`1970-01-01T${a.hora}`).getTime();
-              const dtB = new Date(`1970-01-01T${b.hora}`).getTime();
-              if (!isNaN(dtA) && !isNaN(dtB)) comparison = dtA - dtB;
+              const dtA = new Date(
+                `1970-01-01T${a.hora}`
+              ).getTime();
+              const dtB = new Date(
+                `1970-01-01T${b.hora}`
+              ).getTime();
+              if (!isNaN(dtA) && !isNaN(dtB))
+                comparison = dtA - dtB;
             } catch {
               comparison = 0;
             }
@@ -430,9 +455,14 @@ const DataTableVentas = () => {
         } else if (sortColumn === 'hora') {
           if (a.hora !== 'N/A' && b.hora !== 'N/A') {
             try {
-              const dtA = new Date(`1970-01-01T${a.hora}`).getTime();
-              const dtB = new Date(`1970-01-01T${b.hora}`).getTime();
-              if (!isNaN(dtA) && !isNaN(dtB)) comparison = dtA - dtB;
+              const dtA = new Date(
+                `1970-01-01T${a.hora}`
+              ).getTime();
+              const dtB = new Date(
+                `1970-01-01T${b.hora}`
+              ).getTime();
+              if (!isNaN(dtA) && !isNaN(dtB))
+                comparison = dtA - dtB;
             } catch {
               comparison = 0;
             }
@@ -448,11 +478,13 @@ const DataTableVentas = () => {
           const strB = String(valB ?? '').toLowerCase();
           comparison = strA.localeCompare(strB);
         }
-        return sortDirection === 'asc' ? comparison : comparison * -1;
+        return sortDirection === 'asc'
+          ? comparison
+          : comparison * -1;
       });
     }
 
-    // 3. Calculate Pagination
+    // 3. Pagination math
     const newTotalPages = Math.ceil(
       dataToProcess.length / itemsPerPage
     );
@@ -468,12 +500,11 @@ const DataTableVentas = () => {
     if (adjustedCurrentPage !== currentPage)
       setCurrentPage(adjustedCurrentPage);
 
-    // 4. Slice for Pagination
     const startIndex = (adjustedCurrentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     setFilteredData(dataToProcess.slice(startIndex, endIndex));
 
-    // 5. Set loading to false NOW
+    // 4. Done loading
     if (loading) {
       console.log(
         'Effect 4: Processing complete, setting loading to false.'
@@ -488,7 +519,7 @@ const DataTableVentas = () => {
     sortColumn,
     sortDirection,
     loading,
-    selectedTurno // 👈 agregado aquí
+    selectedTurno
   ]);
 
   // --- Event Handlers ---
@@ -540,13 +571,17 @@ const DataTableVentas = () => {
       !endMonth ||
       !endDay
     ) {
-      setError('Por favor seleccione fechas de inicio y fin completas.');
+      setError(
+        'Por favor seleccione fechas de inicio y fin completas.'
+      );
       return;
     }
     const newStartDateStr = `${startYear}-${startMonth}-${startDay}`;
     const newEndDateStr = `${endYear}-${endMonth}-${endDay}`;
 
-    const startDateObj = new Date(newStartDateStr + 'T00:00:00');
+    const startDateObj = new Date(
+      newStartDateStr + 'T00:00:00'
+    );
     const endDateObj = new Date(newEndDateStr + 'T00:00:00');
 
     if (
@@ -557,7 +592,9 @@ const DataTableVentas = () => {
       return;
     }
     if (startDateObj > endDateObj) {
-      setError('La fecha de inicio no puede ser posterior a la fecha de fin.');
+      setError(
+        'La fecha de inicio no puede ser posterior a la fecha de fin.'
+      );
       return;
     }
 
@@ -577,7 +614,8 @@ const DataTableVentas = () => {
   // --- Sorting Handler ---
   const handleSort = (column: keyof TableRow) => {
     if (loading) return;
-    const isAsc = sortColumn === column && sortDirection === 'asc';
+    const isAsc =
+      sortColumn === column && sortDirection === 'asc';
     setSortColumn(column);
     setSortDirection(isAsc ? 'desc' : 'asc');
     console.log(
@@ -631,16 +669,15 @@ const DataTableVentas = () => {
   return (
     <>
       {/* --- Cards Section --- */}
-      {/* Pass applied dates, which trigger calculations */}
       <VentasCardsReport
         startDate={appliedStartDate}
         endDate={appliedEndDate}
         selectedBranch={selectedBranch}
         operatingExpenses={operatingExpenses}
+        selectedTurno={selectedTurno}
       />
 
       {/* --- Gastos Section --- */}
-      {/* Pass applied dates and the memoized callback */}
       <Gastos
         startDate={appliedStartDate}
         endDate={appliedEndDate}
@@ -655,7 +692,9 @@ const DataTableVentas = () => {
         {/* Filter Controls Row */}
         <div class="row g-2 mb-3 align-items-end filter-controls-row">
           <div class="col-12 col-md-6 col-lg-3">
-            <label class="form-label form-label-sm">Fecha Inicio:</label>
+            <label class="form-label form-label-sm">
+              Fecha Inicio:
+            </label>
             <div class="input-group input-group-sm">
               <select
                 class="form-select"
@@ -688,7 +727,9 @@ const DataTableVentas = () => {
           </div>
 
           <div class="col-12 col-md-6 col-lg-3">
-            <label class="form-label form-label-sm">Fecha Fin:</label>
+            <label class="form-label form-label-sm">
+              Fecha Fin:
+            </label>
             <div class="input-group input-group-sm">
               <select
                 class="form-select"
@@ -754,7 +795,7 @@ const DataTableVentas = () => {
             </select>
           </div>
 
-          {/* 🔴 Nuevo selector de Turno */}
+          {/* Nuevo selector de Turno */}
           <div class="col-6 col-md-4 col-lg-2">
             <label
               htmlFor="turno-select"
@@ -770,9 +811,15 @@ const DataTableVentas = () => {
               disabled={loading}
             >
               <option value="Todos">Todos</option>
-              <option value="TURNO PRIMERO">TURNO PRIMERO</option>
-              <option value="TURNO SEGUNDO">TURNO SEGUNDO</option>
-              <option value="TURNO TERCERO">TURNO TERCERO</option>
+              <option value="TURNO PRIMERO">
+                TURNO PRIMERO
+              </option>
+              <option value="TURNO SEGUNDO">
+                TURNO SEGUNDO
+              </option>
+              <option value="TURNO TERCERO">
+                TURNO TERCERO
+              </option>
             </select>
           </div>
 
@@ -872,7 +919,9 @@ const DataTableVentas = () => {
                       <th>Sucursal</th>
                       <th>Artículo</th>
                       <th
-                        onClick={() => handleSort('cantidad')}
+                        onClick={() =>
+                          handleSort('cantidad')
+                        }
                         className={`sortable text-end ${
                           sortColumn === 'cantidad'
                             ? sortDirection
@@ -1008,7 +1057,9 @@ const DataTableVentas = () => {
                           : '↕'}
                       </th>
                       <th
-                        onClick={() => handleSort('utilidad')}
+                        onClick={() =>
+                          handleSort('utilidad')
+                        }
                         className={`sortable text-end ${
                           sortColumn === 'utilidad'
                             ? sortDirection
@@ -1200,7 +1251,7 @@ const DataTableVentas = () => {
               )}
           </>
         )}
-      </div>{' '}
+      </div>
       {/* End ventas-report-container */}
     </>
   );
