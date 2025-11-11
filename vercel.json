@@ -13,8 +13,12 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "src": "/api/passkit/v1/passes/(.*)/(.*)",
+      "dest": "/api/passkit/v1/passes.js?passTypeIdentifier=$1&serialNumber=$2"
+    },
+    {
+      "src": "/api/hello",
+      "dest": "/api/hello.js"
     },
     {
       "src": "/assets/(.*)",
