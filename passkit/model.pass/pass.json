@@ -1,0 +1,72 @@
+{
+  "formatVersion": 1,
+
+  "passTypeIdentifier": "pass.com.ramongaynor.vertex.lealtad",
+  "teamIdentifier": "5YQ878M638",
+
+  "organizationName": "Vertex Depósito Dental",
+  "description": "Tarjeta de lealtad Vertex",
+
+  "foregroundColor": "#ffffff",
+  "backgroundColor": "#090b80",
+  "labelColor": "#ffffff",
+  "suppressStripShine": true,
+
+  "storeCard": {
+    "headerFields": [
+      {
+        "key": "nivel",
+        "label": "Nivel",
+        "value": "DEMO"
+      }
+    ],
+    "primaryFields": [
+        {
+          "key": "puntos",
+          "label": "PUNTOS",
+          "value": 0,
+          "changeMessage": "Gracias por tu compra, ahora tienes %@ puntos Vertex."
+        }
+      ],
+    "secondaryFields": [
+      {
+        "key": "nombre",
+        "label": "Nombre",
+        "value": "CLIENTE DEMO"
+      }
+    ],
+    "auxiliaryFields": [
+      {
+        "key": "cliente_id",
+        "label": "# CLIENTE",
+        "value": "C-00000"
+      }
+    ]
+  },
+
+  "barcode": {
+    "format": "PKBarcodeFormatPDF417",
+    "message": "TEMPLATE-0000",
+    "messageEncoding": "iso-8859-1"
+  },
+
+  "serialNumber": "TEMPLATE-0000",
+
+  "backFields": [
+    {
+      "key": "contacto",
+      "label": "Contacto",
+      "value": "WhatsApp Vertex: 686-000-0000\nInstagram: @vertexdepositodental"
+    },
+    {
+      "key": "direccion",
+      "label": "Dirección",
+      "value": "Blvd. Ejemplo 123, Col. Centro, Mexicali, B.C."
+    },
+    {
+      "key": "terminos",
+      "label": "Términos y condiciones",
+      "value": "Presenta esta tarjeta antes de pagar. Beneficios válidos solo para estudiantes y dentistas registrados. Sujeto a cambios sin previo aviso."
+    }
+  ]
+}
