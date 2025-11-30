@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks'; // Added useCallback
+import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks';
 import { supabase } from '../utils/supabaseClient';
-import './VentasReport.css'; // Ensure CSS file is present
+import './VentasReport.css';
 import VentasCardsReport from './VentasCardsReport';
-import Gastos from './Gastos'; // Import the Gastos component
+import Gastos from './Gastos';
 
 // --- Interfaces and Constants ---
 interface TableRow {
@@ -74,25 +74,22 @@ const years = Array.from(
 
 const DataTableVentas = () => {
   // --- State ---
-  const [allData, setAllData] = useState<TableRow[]>([]);
-  const [filteredData, setFilteredData] = useState<TableRow[]>([]);
-  const [loading, setLoading] = useState<boolean>(true); // Combined loading state
+  const [data, setData] = useState<TableRow[]>([]); // Data for current page
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBranch, setSelectedBranch] = useState<string>('General');
-
-  // Nuevo estado para Turno
   const [selectedTurno, setSelectedTurno] = useState<string>('Todos');
 
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage] = useState(25);
-  const [totalPages, setTotalPages] = useState<number>(1);
+  const [totalCount, setTotalCount] = useState<number>(0); // Total records found
 
-  const [, setDisplayStartDate] = useState<string>(''); // For display in titles
-  const [, setDisplayEndDate] = useState<string>(''); // For display in titles
-  const [appliedStartDate, setAppliedStartDate] = useState<string>(''); // Used for fetching/calculations
-  const [appliedEndDate, setAppliedEndDate] = useState<string>(''); // Used for fetching/calculations
+  const [, setDisplayStartDate] = useState<string>('');
+  const [, setDisplayEndDate] = useState<string>('');
+  const [appliedStartDate, setAppliedStartDate] = useState<string>('');
+  const [appliedEndDate, setAppliedEndDate] = useState<string>('');
 
   const initialDate = new Date();
   const initialDay = String(initialDate.getDate()).padStart(2, '0');
@@ -108,10 +105,9 @@ const DataTableVentas = () => {
 
   const isInitialMount = useRef(true);
 
-  const [sortColumn, setSortColumn] = useState<keyof TableRow | null>('fecha'); // Default sort
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc'); // Default direction
+  const [sortColumn, setSortColumn] = useState<keyof TableRow>('fecha');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  // --- State for Operating Expenses ---
   const [operatingExpenses, setOperatingExpenses] = useState<number>(0);
 
   // --- Effects ---
@@ -186,7 +182,7 @@ const DataTableVentas = () => {
     };
   }, []);
 
-  // Effect 2: Apply initial dates ONCE dropdowns are populated
+  // Effect 2: Apply initial dates
   useEffect(() => {
     if (
       isInitialMount.current &&
@@ -199,11 +195,6 @@ const DataTableVentas = () => {
     ) {
       const initialStartDate = `${startYear}-${startMonth}-${startDay}`;
       const initialEndDate = `${endYear}-${endMonth}-${endDay}`;
-      console.log(
-        'Effect 2: Applying initial dates:',
-        initialStartDate,
-        initialEndDate
-      );
       setAppliedStartDate(initialStartDate);
       setAppliedEndDate(initialEndDate);
       setSortColumn('fecha');
@@ -212,314 +203,142 @@ const DataTableVentas = () => {
     }
   }, [startYear, startMonth, startDay, endYear, endMonth, endDay]);
 
-  // --- fetchDataFromBranch Helper ---
-  const fetchDataFromBranch = async (
-    branch: string,
-    formattedStart: string,
-    formattedEnd: string
-  ): Promise<TableRow[]> => {
-    if (!formattedStart || !formattedEnd) return [];
-    try {
-      const { data, error: dbError } = await supabase
-        .from(branch)
-        .select('*')
-        .gte('fecha', `${formattedStart} 00:00:00`)
-        .lte('fecha', `${formattedEnd} 23:59:59`)
-        .eq('movto', '1')
-        .returns<any[]>(); // Use any[] first for processing flexibility
+  // Effect 3: Fetch Data (Server-Side Pagination)
+  useEffect(() => {
+    if (isInitialMount.current || !appliedStartDate || !appliedEndDate) {
+      return;
+    }
 
-      if (dbError) throw dbError;
-      if (!data) return [];
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
 
-      return data.map((item: any): TableRow => {
-        const cantidad = safeParseFloatAndRound(item.cantidad);
-        const costo = safeParseFloatAndRound(item.costo);
-        const ppub = safeParseFloatAndRound(item.ppub);
-        const dscto = safeParseFloatAndRound(item.dscto);
-        const costoTotal = safeParseFloatAndRound(cantidad * costo);
-        const precioFinal = safeParseFloatAndRound(
-          cantidad * ppub
-        ); // qty * ppub
-        const utilidad = safeParseFloatAndRound(
-          precioFinal - costoTotal - dscto
-        ); // recalc utilidad
+      try {
+        const tableName =
+          selectedBranch === 'General' ? 'vista_ventas_general' : selectedBranch;
 
-        // Format Time safely
-        let formattedHora = 'N/A';
-        if (item.hora) {
-          try {
-            const dateWithTime = item.hora.includes('T')
-              ? new Date(item.hora)
-              : new Date(`1970-01-01T${item.hora}`);
-            if (!isNaN(dateWithTime.getTime())) {
-              formattedHora = dateWithTime.toLocaleTimeString(
-                'es-MX',
-                {
+        // Base query
+        let query = supabase
+          .from(tableName)
+          .select('*', { count: 'exact' })
+          .gte('fecha', `${appliedStartDate} 00:00:00`)
+          .lte('fecha', `${appliedEndDate} 23:59:59`)
+          .eq('movto', '1');
+
+        // Filters
+        if (selectedTurno !== 'Todos') {
+          query = query.eq('turno', selectedTurno);
+        }
+
+        if (searchQuery) {
+          // Note: 'ilike' works on text columns. For numbers, we might need casting or exact match.
+          // Searching across multiple columns with 'or'
+          const term = `%${searchQuery}%`;
+          query = query.or(
+            `articulo.ilike.${term},nombre.ilike.${term},referencia.ilike.${term},fol.ilike.${term}`
+          );
+        }
+
+        // Sorting
+        query = query.order(sortColumn, { ascending: sortDirection === 'asc' });
+
+        // Pagination
+        const from = (currentPage - 1) * itemsPerPage;
+        const to = from + itemsPerPage - 1;
+        query = query.range(from, to);
+
+        const { data: resultData, error: resultError, count } = await query;
+
+        if (resultError) throw resultError;
+
+        if (count !== null) setTotalCount(count);
+
+        // Process Data
+        const processedData: TableRow[] = (resultData || []).map((item: any) => {
+          const cantidad = safeParseFloatAndRound(item.cantidad);
+          const costo = safeParseFloatAndRound(item.costo);
+          const ppub = safeParseFloatAndRound(item.ppub);
+          const dscto = safeParseFloatAndRound(item.dscto);
+          const costoTotal = safeParseFloatAndRound(cantidad * costo);
+          const precioFinal = safeParseFloatAndRound(cantidad * ppub);
+          const utilidad = safeParseFloatAndRound(
+            precioFinal - costoTotal - dscto
+          );
+
+          let formattedHora = 'N/A';
+          if (item.hora) {
+            try {
+              const dateWithTime = item.hora.includes('T')
+                ? new Date(item.hora)
+                : new Date(`1970-01-01T${item.hora}`);
+              if (!isNaN(dateWithTime.getTime())) {
+                formattedHora = dateWithTime.toLocaleTimeString('es-MX', {
                   hour: '2-digit',
                   minute: '2-digit',
                   second: '2-digit',
                   hour12: false
-                }
-              );
+                });
+              }
+            } catch (e) {
+              // ignore
             }
-          } catch (timeError) {
-            console.warn(
-              `Could not parse time: ${item.hora}`,
-              timeError
-            );
           }
-        }
 
-        return {
-          id: Number(item.id || 0),
-          articulo: String(item.articulo || ''),
-          fecha: item.fecha
-            ? String(item.fecha).split('T')[0]
-            : 'N/A', // Keep only date part
-          tipo: String(item.tipo || ''),
-          movto: String(item.movto || ''),
-          desc_movto: String(item.desc_movto || ''),
-          cantidad: cantidad,
-          costo: costo,
-          referencia: String(item.referencia || ''),
-          hora: formattedHora,
-          nombre: String(item.nombre || ''),
-          turno: String(item.turno || ''),
-          ppub: ppub,
-          autonumber: Number(item.autonumber || 0),
-          fol: String(item.fol || ''),
-          dscto: dscto,
-          costoTotal: costoTotal,
-          precioFinal: precioFinal,
-          utilidad: utilidad,
-          sucursal: branch // Keep original branch name from fetch
-        };
-      });
-    } catch (err: any) {
-      console.error(
-        `Error fetching TABLE data from ${branch}:`,
-        err.message
-      );
-      setError(`Error getting TABLE data from ${branch}.`);
-      return [];
-    }
-  };
-
-  // Effect 3: Fetch TABLE data
-  useEffect(() => {
-    if (isInitialMount.current || !appliedStartDate || !appliedEndDate) {
-      console.log(
-        'Effect 3: Skipping fetch (initial mount or missing applied dates)'
-      );
-      if (!isInitialMount.current && (!appliedStartDate || !appliedEndDate)) {
-        setLoading(false);
-        setAllData([]);
-        setFilteredData([]);
-      }
-      return;
-    }
-
-    const fetchAllData = async () => {
-      console.log(
-        'Effect 3: Fetching TABLE data for',
-        appliedStartDate,
-        'to',
-        appliedEndDate,
-        'Branch:',
-        selectedBranch
-      );
-      setLoading(true);
-      setError(null);
-      setAllData([]);
-      setFilteredData([]);
-      setCurrentPage(1);
-
-      const formattedStartDate = appliedStartDate;
-      const formattedEndDate = appliedEndDate;
-      let combinedData: TableRow[] = [];
-      const branchesToFetch =
-        selectedBranch === 'General' ? branches : [selectedBranch];
-
-      try {
-        const promises = branchesToFetch.map((branch) =>
-          fetchDataFromBranch(
-            branch,
-            formattedStartDate,
-            formattedEndDate
-          )
-        );
-        const results = await Promise.allSettled(promises);
-
-        results.forEach((result, index) => {
-          if (result.status === 'fulfilled') {
-            combinedData = combinedData.concat(result.value);
-          } else {
-            console.error(
-              `VentasReport: Failed to fetch data for branch ${branchesToFetch[index]}:`,
-              result.reason
-            );
-          }
+          return {
+            id: Number(item.id || 0),
+            articulo: String(item.articulo || ''),
+            fecha: item.fecha ? String(item.fecha).split('T')[0] : 'N/A',
+            tipo: String(item.tipo || ''),
+            movto: String(item.movto || ''),
+            desc_movto: String(item.desc_movto || ''),
+            cantidad: cantidad,
+            costo: costo,
+            referencia: String(item.referencia || ''),
+            hora: formattedHora,
+            nombre: String(item.nombre || ''),
+            turno: String(item.turno || ''),
+            ppub: ppub,
+            autonumber: Number(item.autonumber || 0),
+            fol: String(item.fol || ''),
+            dscto: dscto,
+            costoTotal: costoTotal,
+            precioFinal: precioFinal,
+            utilidad: utilidad,
+            sucursal: item.sucursal || selectedBranch // Use returned branch or selected
+          };
         });
 
-        setAllData(combinedData);
-        if (combinedData.length === 0 && !error) {
-          console.log(
-            'Effect 3: Fetch complete, no data found for selection.'
-          );
-        } else {
-          console.log(
-            'Effect 3: Fetch complete, raw data count:',
-            combinedData.length
-          );
-        }
+        setData(processedData);
       } catch (err: any) {
-        console.error(
-          'VentasReport: General error during TABLE data fetch:',
-          err
-        );
+        console.error('Error fetching data:', err);
         setError(
-          'Ocurrió un error general al obtener los datos de la tabla.'
+          `Error al obtener datos: ${err.message}. ${selectedBranch === 'General'
+            ? 'Asegúrese de que la vista "vista_ventas_general" exista.'
+            : ''
+          }`
         );
-        setAllData([]);
+        setData([]);
       } finally {
-        // loading will be set to false in Effect 4
+        setLoading(false);
       }
     };
 
-    fetchAllData();
-  }, [appliedStartDate, appliedEndDate, selectedBranch]);
+    // Debounce search
+    const timeoutId = setTimeout(() => {
+      fetchData();
+    }, 500);
 
-  // Effect 4: Filter, SORT, and Paginate TABLE data
-  useEffect(() => {
-    if (isInitialMount.current) {
-      console.log('Effect 4: Skipping processing (initial mount)');
-      return;
-    }
-
-    console.log(
-      'Effect 4: Processing data (Filter/Sort/Paginate). Current allData length:',
-      allData.length,
-      'Loading state:',
-      loading
-    );
-
-    let dataToProcess = [...allData];
-
-    // 1. Apply Text Search Filter
-    if (searchQuery) {
-      const lowerCaseQuery = searchQuery.toLowerCase();
-      dataToProcess = dataToProcess.filter((row) =>
-        Object.values(row).some((value) =>
-          value?.toString().toLowerCase().includes(lowerCaseQuery) ??
-          false
-        )
-      );
-    }
-
-    // 1.5 Apply Turno Filter
-    if (selectedTurno !== 'Todos') {
-      dataToProcess = dataToProcess.filter(
-        (row) => row.turno === selectedTurno
-      );
-    }
-
-    // 2. Apply Sorting
-    if (sortColumn) {
-      dataToProcess.sort((a, b) => {
-        let comparison = 0;
-        const valA = a[sortColumn];
-        const valB = b[sortColumn];
-
-        if (sortColumn === 'fecha') {
-          const dateA = a.fecha;
-          const dateB = b.fecha;
-          comparison = dateA.localeCompare(dateB);
-          if (
-            comparison === 0 &&
-            a.hora !== 'N/A' &&
-            b.hora !== 'N/A'
-          ) {
-            try {
-              const dtA = new Date(
-                `1970-01-01T${a.hora}`
-              ).getTime();
-              const dtB = new Date(
-                `1970-01-01T${b.hora}`
-              ).getTime();
-              if (!isNaN(dtA) && !isNaN(dtB))
-                comparison = dtA - dtB;
-            } catch {
-              comparison = 0;
-            }
-          }
-        } else if (sortColumn === 'hora') {
-          if (a.hora !== 'N/A' && b.hora !== 'N/A') {
-            try {
-              const dtA = new Date(
-                `1970-01-01T${a.hora}`
-              ).getTime();
-              const dtB = new Date(
-                `1970-01-01T${b.hora}`
-              ).getTime();
-              if (!isNaN(dtA) && !isNaN(dtB))
-                comparison = dtA - dtB;
-            } catch {
-              comparison = 0;
-            }
-          } else if (a.hora !== 'N/A') comparison = -1; // Valid time first
-          else if (b.hora !== 'N/A') comparison = 1;
-        } else if (
-          typeof valA === 'number' &&
-          typeof valB === 'number'
-        ) {
-          comparison = valA - valB;
-        } else {
-          const strA = String(valA ?? '').toLowerCase();
-          const strB = String(valB ?? '').toLowerCase();
-          comparison = strA.localeCompare(strB);
-        }
-        return sortDirection === 'asc'
-          ? comparison
-          : comparison * -1;
-      });
-    }
-
-    // 3. Pagination math
-    const newTotalPages = Math.ceil(
-      dataToProcess.length / itemsPerPage
-    );
-    setTotalPages(newTotalPages > 0 ? newTotalPages : 1);
-
-    let adjustedCurrentPage = currentPage;
-    if (currentPage > newTotalPages && newTotalPages > 0)
-      adjustedCurrentPage = newTotalPages;
-    else if (adjustedCurrentPage < 1 && newTotalPages > 0)
-      adjustedCurrentPage = 1;
-    else if (newTotalPages === 0) adjustedCurrentPage = 1;
-
-    if (adjustedCurrentPage !== currentPage)
-      setCurrentPage(adjustedCurrentPage);
-
-    const startIndex = (adjustedCurrentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    setFilteredData(dataToProcess.slice(startIndex, endIndex));
-
-    // 4. Done loading
-    if (loading) {
-      console.log(
-        'Effect 4: Processing complete, setting loading to false.'
-      );
-      setLoading(false);
-    }
+    return () => clearTimeout(timeoutId);
   }, [
+    appliedStartDate,
+    appliedEndDate,
+    selectedBranch,
+    selectedTurno,
     searchQuery,
-    allData,
     currentPage,
-    itemsPerPage,
     sortColumn,
     sortDirection,
-    loading,
-    selectedTurno
+    itemsPerPage
   ]);
 
   // --- Event Handlers ---
@@ -542,6 +361,7 @@ const DataTableVentas = () => {
   };
 
   const handlePageChange = (newPage: number) => {
+    const totalPages = Math.ceil(totalCount / itemsPerPage);
     if (newPage >= 1 && newPage <= totalPages && !loading) {
       setCurrentPage(newPage);
     }
@@ -561,7 +381,6 @@ const DataTableVentas = () => {
   const handleEndYearChange = (e: Event) =>
     setEndYear((e.target as HTMLSelectElement).value);
 
-  // Apply Button Handler
   const handleApplyDatesClick = () => {
     if (
       !startYear ||
@@ -571,38 +390,24 @@ const DataTableVentas = () => {
       !endMonth ||
       !endDay
     ) {
-      setError(
-        'Por favor seleccione fechas de inicio y fin completas.'
-      );
+      setError('Por favor seleccione fechas de inicio y fin completas.');
       return;
     }
     const newStartDateStr = `${startYear}-${startMonth}-${startDay}`;
     const newEndDateStr = `${endYear}-${endMonth}-${endDay}`;
 
-    const startDateObj = new Date(
-      newStartDateStr + 'T00:00:00'
-    );
+    const startDateObj = new Date(newStartDateStr + 'T00:00:00');
     const endDateObj = new Date(newEndDateStr + 'T00:00:00');
 
-    if (
-      isNaN(startDateObj.getTime()) ||
-      isNaN(endDateObj.getTime())
-    ) {
+    if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
       setError('Las fechas seleccionadas no son válidas.');
       return;
     }
     if (startDateObj > endDateObj) {
-      setError(
-        'La fecha de inicio no puede ser posterior a la fecha de fin.'
-      );
+      setError('La fecha de inicio no puede ser posterior a la fecha de fin.');
       return;
     }
 
-    console.log(
-      'Apply clicked: Setting applied dates to:',
-      newStartDateStr,
-      newEndDateStr
-    );
     setError(null);
     setDisplayStartDate(newStartDateStr);
     setDisplayEndDate(newEndDateStr);
@@ -611,32 +416,22 @@ const DataTableVentas = () => {
     setCurrentPage(1);
   };
 
-  // --- Sorting Handler ---
   const handleSort = (column: keyof TableRow) => {
     if (loading) return;
-    const isAsc =
-      sortColumn === column && sortDirection === 'asc';
+    const isAsc = sortColumn === column && sortDirection === 'asc';
     setSortColumn(column);
     setSortDirection(isAsc ? 'desc' : 'asc');
-    console.log(
-      `Sorting by ${column} ${isAsc ? 'desc' : 'asc'}`
-    );
   };
 
-  // --- Callback Handler for Expenses (MEMOIZED) ---
-  const handleExpensesCalculated = useCallback(
-    (calculatedExpenses: number) => {
-      setOperatingExpenses((prevExpenses) => {
-        if (prevExpenses !== calculatedExpenses) {
-          return calculatedExpenses;
-        }
-        return prevExpenses;
-      });
-    },
-    []
-  ); // Empty dependency array because setOperatingExpenses is stable
+  const handleExpensesCalculated = useCallback((calculatedExpenses: number) => {
+    setOperatingExpenses((prevExpenses) => {
+      if (prevExpenses !== calculatedExpenses) {
+        return calculatedExpenses;
+      }
+      return prevExpenses;
+    });
+  }, []);
 
-  // Memoized dropdown options
   const yearOptions = useMemo(
     () =>
       years.map((year) => (
@@ -665,10 +460,10 @@ const DataTableVentas = () => {
     []
   );
 
-  // --- Render ---
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
+
   return (
     <>
-      {/* --- Cards Section --- */}
       <VentasCardsReport
         startDate={appliedStartDate}
         endDate={appliedEndDate}
@@ -677,7 +472,6 @@ const DataTableVentas = () => {
         selectedTurno={selectedTurno}
       />
 
-      {/* --- Gastos Section --- */}
       <Gastos
         startDate={appliedStartDate}
         endDate={appliedEndDate}
@@ -685,23 +479,18 @@ const DataTableVentas = () => {
         onExpensesCalculated={handleExpensesCalculated}
       />
 
-      {/* --- Table Section --- */}
       <div class="ventas-report-container">
         <h2>Detalle de Ventas</h2>
 
-        {/* Filter Controls Row */}
         <div class="row g-2 mb-3 align-items-end filter-controls-row">
           <div class="col-12 col-md-6 col-lg-3">
-            <label class="form-label form-label-sm">
-              Fecha Inicio:
-            </label>
+            <label class="form-label form-label-sm">Fecha Inicio:</label>
             <div class="input-group input-group-sm">
               <select
                 class="form-select"
                 value={startDay}
                 onChange={handleStartDayChange}
                 disabled={loading}
-                aria-label="Día inicio"
               >
                 {dayOptions}
               </select>
@@ -710,7 +499,6 @@ const DataTableVentas = () => {
                 value={startMonth}
                 onChange={handleStartMonthChange}
                 disabled={loading}
-                aria-label="Mes inicio"
               >
                 {monthOptions}
               </select>
@@ -719,7 +507,6 @@ const DataTableVentas = () => {
                 value={startYear}
                 onChange={handleStartYearChange}
                 disabled={loading}
-                aria-label="Año inicio"
               >
                 {yearOptions}
               </select>
@@ -727,16 +514,13 @@ const DataTableVentas = () => {
           </div>
 
           <div class="col-12 col-md-6 col-lg-3">
-            <label class="form-label form-label-sm">
-              Fecha Fin:
-            </label>
+            <label class="form-label form-label-sm">Fecha Fin:</label>
             <div class="input-group input-group-sm">
               <select
                 class="form-select"
                 value={endDay}
                 onChange={handleEndDayChange}
                 disabled={loading}
-                aria-label="Día fin"
               >
                 {dayOptions}
               </select>
@@ -745,7 +529,6 @@ const DataTableVentas = () => {
                 value={endMonth}
                 onChange={handleEndMonthChange}
                 disabled={loading}
-                aria-label="Mes fin"
               >
                 {monthOptions}
               </select>
@@ -754,7 +537,6 @@ const DataTableVentas = () => {
                 value={endYear}
                 onChange={handleEndYearChange}
                 disabled={loading}
-                aria-label="Año fin"
               >
                 {yearOptions}
               </select>
@@ -773,10 +555,7 @@ const DataTableVentas = () => {
           </div>
 
           <div class="col-6 col-md-4 col-lg-2">
-            <label
-              htmlFor="branch-select"
-              class="form-label form-label-sm"
-            >
+            <label htmlFor="branch-select" class="form-label form-label-sm">
               Sucursal:
             </label>
             <select
@@ -795,12 +574,8 @@ const DataTableVentas = () => {
             </select>
           </div>
 
-          {/* Nuevo selector de Turno */}
           <div class="col-6 col-md-4 col-lg-2">
-            <label
-              htmlFor="turno-select"
-              class="form-label form-label-sm"
-            >
+            <label htmlFor="turno-select" class="form-label form-label-sm">
               Turno:
             </label>
             <select
@@ -811,448 +586,242 @@ const DataTableVentas = () => {
               disabled={loading}
             >
               <option value="Todos">Todos</option>
-              <option value="TURNO PRIMERO">
-                TURNO PRIMERO
-              </option>
-              <option value="TURNO SEGUNDO">
-                TURNO SEGUNDO
-              </option>
-              <option value="TURNO TERCERO">
-                TURNO TERCERO
-              </option>
+              <option value="TURNO PRIMERO">TURNO PRIMERO</option>
+              <option value="TURNO SEGUNDO">TURNO SEGUNDO</option>
             </select>
           </div>
+        </div>
 
-          <div class="col-6 col-md-5 col-lg-3">
-            <label
-              htmlFor="search-input"
-              class="form-label form-label-sm"
-            >
-              Buscar:
-            </label>
+        <div class="row mb-3">
+          <div class="col-12">
             <input
-              type="search"
-              id="search-input"
+              type="text"
               class="form-control form-control-sm"
-              placeholder="Buscar en tabla..."
+              placeholder="Buscar por artículo, nombre, referencia o folio..."
               value={searchQuery}
               onInput={handleSearchChange}
-              disabled={loading || allData.length === 0}
+              disabled={loading}
             />
           </div>
         </div>
 
-        {/* Error Display */}
-        {error && !loading && (
-          <div class="alert alert-danger mt-2">{error}</div>
-        )}
+        {error && <div class="alert alert-danger">{error}</div>}
 
-        {/* Loading Indicator for Table */}
-        {loading && (
-          <div
-            class="d-flex justify-content-center align-items-center"
-            style={{ minHeight: '200px' }}
-          >
-            <div
-              class="spinner-border text-primary"
-              role="status"
-            >
-              <span class="visually-hidden">
-                Cargando tabla...
-              </span>
+        {loading ? (
+          <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Cargando datos...</span>
             </div>
+            <p class="mt-2 text-muted">Obteniendo registros...</p>
+          </div>
+        ) : (
+          <div class="table-responsive">
+            <table class="table table-sm table-striped table-hover table-bordered align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th
+                    onClick={() => handleSort('fecha')}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    Fecha{' '}
+                    {sortColumn === 'fecha' &&
+                      (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    onClick={() => handleSort('hora')}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    Hora{' '}
+                    {sortColumn === 'hora' &&
+                      (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    onClick={() => handleSort('sucursal')}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    Sucursal{' '}
+                    {sortColumn === 'sucursal' &&
+                      (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    onClick={() => handleSort('articulo')}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    Artículo{' '}
+                    {sortColumn === 'articulo' &&
+                      (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    onClick={() => handleSort('nombre')}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    Nombre{' '}
+                    {sortColumn === 'nombre' &&
+                      (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    onClick={() => handleSort('cantidad')}
+                    style={{ cursor: 'pointer' }}
+                    class="text-end"
+                  >
+                    Cant.{' '}
+                    {sortColumn === 'cantidad' &&
+                      (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    onClick={() => handleSort('ppub')}
+                    style={{ cursor: 'pointer' }}
+                    class="text-end"
+                  >
+                    P.Unit{' '}
+                    {sortColumn === 'ppub' &&
+                      (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    onClick={() => handleSort('dscto')}
+                    style={{ cursor: 'pointer' }}
+                    class="text-end"
+                  >
+                    Dscto{' '}
+                    {sortColumn === 'dscto' &&
+                      (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    onClick={() => handleSort('precioFinal')}
+                    style={{ cursor: 'pointer' }}
+                    class="text-end"
+                  >
+                    Total{' '}
+                    {sortColumn === 'precioFinal' &&
+                      (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    onClick={() => handleSort('utilidad')}
+                    style={{ cursor: 'pointer' }}
+                    class="text-end"
+                  >
+                    Utilidad{' '}
+                    {sortColumn === 'utilidad' &&
+                      (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    onClick={() => handleSort('turno')}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    Turno{' '}
+                    {sortColumn === 'turno' &&
+                      (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    onClick={() => handleSort('fol')}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    Folio{' '}
+                    {sortColumn === 'fol' &&
+                      (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.length > 0 ? (
+                  data.map((row, index) => (
+                    <tr key={`${row.id}-${index}`}>
+                      <td>{row.fecha}</td>
+                      <td>{row.hora}</td>
+                      <td>{row.sucursal.replace('Kardex', '')}</td>
+                      <td class="text-truncate" style={{ maxWidth: '150px' }}>
+                        {row.articulo}
+                      </td>
+                      <td class="text-truncate" style={{ maxWidth: '200px' }}>
+                        {row.nombre}
+                      </td>
+                      <td class="text-end">{row.cantidad}</td>
+                      <td class="text-end">
+                        {row.ppub.toLocaleString('es-MX', {
+                          style: 'currency',
+                          currency: 'MXN'
+                        })}
+                      </td>
+                      <td class="text-end text-warning">
+                        {row.dscto > 0
+                          ? row.dscto.toLocaleString('es-MX', {
+                            style: 'currency',
+                            currency: 'MXN'
+                          })
+                          : '-'}
+                      </td>
+                      <td class="text-end fw-bold">
+                        {row.precioFinal.toLocaleString('es-MX', {
+                          style: 'currency',
+                          currency: 'MXN'
+                        })}
+                      </td>
+                      <td
+                        class={`text-end ${row.utilidad >= 0 ? 'text-success' : 'text-danger'
+                          }`}
+                      >
+                        {row.utilidad.toLocaleString('es-MX', {
+                          style: 'currency',
+                          currency: 'MXN'
+                        })}
+                      </td>
+                      <td>{row.turno}</td>
+                      <td>{row.fol}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={12} class="text-center py-3">
+                      No se encontraron registros.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         )}
 
-        {/* --- Data Table --- */}
-        {!loading && (
-          <>
-            {allData.length > 0 ? (
-              <div class="table-container">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th
-                        onClick={() => handleSort('fecha')}
-                        className={`sortable ${
-                          sortColumn === 'fecha'
-                            ? sortDirection
-                            : ''
-                        }`}
-                        aria-sort={
-                          sortColumn === 'fecha'
-                            ? sortDirection === 'asc'
-                              ? 'ascending'
-                              : 'descending'
-                            : 'none'
-                        }
-                      >
-                        Fecha{' '}
-                        {sortColumn === 'fecha'
-                          ? sortDirection === 'asc'
-                            ? '▲'
-                            : '▼'
-                          : '↕'}
-                      </th>
-                      <th
-                        onClick={() => handleSort('hora')}
-                        className={`sortable ${
-                          sortColumn === 'hora'
-                            ? sortDirection
-                            : ''
-                        }`}
-                        aria-sort={
-                          sortColumn === 'hora'
-                            ? sortDirection === 'asc'
-                              ? 'ascending'
-                              : 'descending'
-                            : 'none'
-                        }
-                      >
-                        Hora{' '}
-                        {sortColumn === 'hora'
-                          ? sortDirection === 'asc'
-                            ? '▲'
-                            : '▼'
-                          : '↕'}
-                      </th>
-                      <th>Sucursal</th>
-                      <th>Artículo</th>
-                      <th
-                        onClick={() =>
-                          handleSort('cantidad')
-                        }
-                        className={`sortable text-end ${
-                          sortColumn === 'cantidad'
-                            ? sortDirection
-                            : ''
-                        }`}
-                        aria-sort={
-                          sortColumn === 'cantidad'
-                            ? sortDirection === 'asc'
-                              ? 'ascending'
-                              : 'descending'
-                            : 'none'
-                        }
-                      >
-                        Cantidad{' '}
-                        {sortColumn === 'cantidad'
-                          ? sortDirection === 'asc'
-                            ? '▲'
-                            : '▼'
-                          : '↕'}
-                      </th>
-                      <th
-                        onClick={() => handleSort('ppub')}
-                        className={`sortable text-end ${
-                          sortColumn === 'ppub'
-                            ? sortDirection
-                            : ''
-                        }`}
-                        aria-sort={
-                          sortColumn === 'ppub'
-                            ? sortDirection === 'asc'
-                              ? 'ascending'
-                              : 'descending'
-                            : 'none'
-                        }
-                      >
-                        P. Público{' '}
-                        {sortColumn === 'ppub'
-                          ? sortDirection === 'asc'
-                            ? '▲'
-                            : '▼'
-                          : '↕'}
-                      </th>
-                      <th
-                        onClick={() => handleSort('dscto')}
-                        className={`sortable text-end ${
-                          sortColumn === 'dscto'
-                            ? sortDirection
-                            : ''
-                        }`}
-                        aria-sort={
-                          sortColumn === 'dscto'
-                            ? sortDirection === 'asc'
-                              ? 'ascending'
-                              : 'descending'
-                            : 'none'
-                        }
-                      >
-                        Desc.{' '}
-                        {sortColumn === 'dscto'
-                          ? sortDirection === 'asc'
-                            ? '▲'
-                            : '▼'
-                          : '↕'}
-                      </th>
-                      <th
-                        onClick={() =>
-                          handleSort('precioFinal')
-                        }
-                        className={`sortable text-end ${
-                          sortColumn === 'precioFinal'
-                            ? sortDirection
-                            : ''
-                        }`}
-                        aria-sort={
-                          sortColumn === 'precioFinal'
-                            ? sortDirection === 'asc'
-                              ? 'ascending'
-                              : 'descending'
-                            : 'none'
-                        }
-                      >
-                        P. Final{' '}
-                        {sortColumn === 'precioFinal'
-                          ? sortDirection === 'asc'
-                            ? '▲'
-                            : '▼'
-                          : '↕'}
-                      </th>
-                      <th
-                        onClick={() => handleSort('costo')}
-                        className={`sortable text-end ${
-                          sortColumn === 'costo'
-                            ? sortDirection
-                            : ''
-                        }`}
-                        aria-sort={
-                          sortColumn === 'costo'
-                            ? sortDirection === 'asc'
-                              ? 'ascending'
-                              : 'descending'
-                            : 'none'
-                        }
-                      >
-                        Costo U.{' '}
-                        {sortColumn === 'costo'
-                          ? sortDirection === 'asc'
-                            ? '▲'
-                            : '▼'
-                          : '↕'}
-                      </th>
-                      <th
-                        onClick={() =>
-                          handleSort('costoTotal')
-                        }
-                        className={`sortable text-end ${
-                          sortColumn === 'costoTotal'
-                            ? sortDirection
-                            : ''
-                        }`}
-                        aria-sort={
-                          sortColumn === 'costoTotal'
-                            ? sortDirection === 'asc'
-                              ? 'ascending'
-                              : 'descending'
-                            : 'none'
-                        }
-                      >
-                        Costo Total{' '}
-                        {sortColumn === 'costoTotal'
-                          ? sortDirection === 'asc'
-                            ? '▲'
-                            : '▼'
-                          : '↕'}
-                      </th>
-                      <th
-                        onClick={() =>
-                          handleSort('utilidad')
-                        }
-                        className={`sortable text-end ${
-                          sortColumn === 'utilidad'
-                            ? sortDirection
-                            : ''
-                        }`}
-                        aria-sort={
-                          sortColumn === 'utilidad'
-                            ? sortDirection === 'asc'
-                              ? 'ascending'
-                              : 'descending'
-                            : 'none'
-                        }
-                      >
-                        Utilidad{' '}
-                        {sortColumn === 'utilidad'
-                          ? sortDirection === 'asc'
-                            ? '▲'
-                            : '▼'
-                          : '↕'}
-                      </th>
-                      <th>Referencia</th>
-                      <th>Folio</th>
-                      <th>Turno</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredData.length > 0 ? (
-                      filteredData.map((row) => (
-                        <tr
-                          key={`${row.sucursal}-${row.autonumber}-${
-                            row.id || Math.random()
-                          }`}
-                        >
-                          <td>{row.fecha}</td>
-                          <td>{row.hora}</td>
-                          <td>
-                            {row.sucursal.replace(
-                              'Kardex',
-                              ''
-                            )}
-                          </td>
-                          <td class="articulo-cell">
-                            {row.articulo} - {row.nombre}
-                          </td>
-                          <td class="number-cell">
-                            {row.cantidad.toLocaleString(
-                              'es-MX'
-                            )}
-                          </td>
-                          <td class="currency-cell">
-                            {row.ppub.toLocaleString(
-                              'es-MX',
-                              {
-                                style: 'currency',
-                                currency: 'MXN'
-                              }
-                            )}
-                          </td>
-                          <td class="currency-cell">
-                            {row.dscto.toLocaleString(
-                              'es-MX',
-                              {
-                                style: 'currency',
-                                currency: 'MXN'
-                              }
-                            )}
-                          </td>
-                          <td class="currency-cell">
-                            {row.precioFinal.toLocaleString(
-                              'es-MX',
-                              {
-                                style: 'currency',
-                                currency: 'MXN'
-                              }
-                            )}
-                          </td>
-                          <td class="currency-cell">
-                            {row.costo.toLocaleString(
-                              'es-MX',
-                              {
-                                style: 'currency',
-                                currency: 'MXN'
-                              }
-                            )}
-                          </td>
-                          <td class="currency-cell">
-                            {row.costoTotal.toLocaleString(
-                              'es-MX',
-                              {
-                                style: 'currency',
-                                currency: 'MXN'
-                              }
-                            )}
-                          </td>
-                          <td
-                            class={`currency-cell ${
-                              row.utilidad < 0
-                                ? 'negative-utilidad'
-                                : ''
-                            }`}
-                          >
-                            {row.utilidad.toLocaleString(
-                              'es-MX',
-                              {
-                                style: 'currency',
-                                currency: 'MXN'
-                              }
-                            )}
-                          </td>
-                          <td>{row.referencia}</td>
-                          <td>{row.fol}</td>
-                          <td>{row.turno}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td
-                          colSpan={14}
-                          style={{
-                            textAlign: 'center',
-                            padding: '20px'
-                          }}
-                        >
-                          {searchQuery
-                            ? 'No hay resultados para su búsqueda.'
-                            : 'No hay datos de ventas en esta página.'}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div class="alert alert-info mt-3 text-center">
-                {!error
-                  ? 'No se encontraron ventas para los filtros seleccionados.'
-                  : ''}
-              </div>
-            )}
-
-            {/* Pagination */}
-            {allData.length > 0 && totalPages > 1 && (
-              <div class="pagination-controls d-flex justify-content-center align-items-center mt-3">
+        {/* Pagination Controls */}
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <div>
+            <span class="text-muted small">
+              Mostrando {data.length} de {totalCount} registros
+            </span>
+          </div>
+          <nav aria-label="Page navigation">
+            <ul class="pagination pagination-sm mb-0">
+              <li class={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                 <button
-                  class="btn btn-sm btn-outline-secondary me-2"
-                  onClick={() =>
-                    handlePageChange(currentPage - 1)
-                  }
-                  disabled={
-                    currentPage === 1 || loading
-                  }
+                  class="page-link"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1 || loading}
                 >
                   Anterior
                 </button>
-                <span class="text-muted small mx-2">
-                  Página {currentPage} de {totalPages} (
-                  {allData.length.toLocaleString(
-                    'es-MX'
-                  )}{' '}
-                  registros)
+              </li>
+              <li class="page-item disabled">
+                <span class="page-link">
+                  Página {currentPage} de {totalPages || 1}
                 </span>
+              </li>
+              <li
+                class={`page-item ${currentPage === totalPages || totalPages === 0 ? 'disabled' : ''
+                  }`}
+              >
                 <button
-                  class="btn btn-sm btn-outline-secondary ms-2"
-                  onClick={() =>
-                    handlePageChange(currentPage + 1)
-                  }
+                  class="page-link"
+                  onClick={() => handlePageChange(currentPage + 1)}
                   disabled={
-                    currentPage === totalPages ||
-                    loading
+                    currentPage === totalPages || totalPages === 0 || loading
                   }
                 >
                   Siguiente
                 </button>
-              </div>
-            )}
-
-            {allData.length > 0 &&
-              totalPages <= 1 &&
-              !loading && (
-                <div class="pagination-controls d-flex justify-content-center text-muted small mt-3">
-                  <span>
-                    Total:{' '}
-                    {allData.length.toLocaleString(
-                      'es-MX'
-                    )}{' '}
-                    registros
-                  </span>
-                </div>
-              )}
-          </>
-        )}
+              </li>
+            </ul>
+          </nav>
+        </div>
       </div>
-      {/* End ventas-report-container */}
     </>
   );
 };
