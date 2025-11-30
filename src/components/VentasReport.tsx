@@ -113,6 +113,8 @@ const DataTableVentas = () => {
   // --- Modal State ---
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [selectedArticle, setSelectedArticle] = useState<TableRow | null>(null);
+  const [articleName, setArticleName] = useState<string>('');
+  const [loadingArticleName, setLoadingArticleName] = useState<boolean>(false);
 
   // --- Effects ---
 
@@ -439,9 +441,49 @@ const DataTableVentas = () => {
     setSortDirection(isAsc ? 'desc' : 'asc');
   };
 
-  const handleArticleClick = (row: TableRow) => {
+  const getBranchArticulosTable = (kardexBranch: string): string => {
+    // Map Kardex branch names to Articulos table names
+    const branchMap: Record<string, string> = {
+      'KardexMexico': 'ArticulosMexico',
+      'KardexMadero': 'ArticulosMadero',
+      'KardexEcono1': 'ArticulosEcono1',
+      'KardexLopezM': 'ArticulosLopezM',
+      'KardexBaja': 'ArticulosBaja',
+      'KardexEcono2': 'ArticulosEcono2',
+      'KardexLolita': 'ArticulosLolita'
+    };
+    return branchMap[kardexBranch] || 'ArticulosMexico'; // Default to Mexico
+  };
+
+  const handleArticleClick = async (row: TableRow) => {
     setSelectedArticle(row);
     setModalOpen(true);
+    setArticleName('');
+    setLoadingArticleName(true);
+
+    // Fetch article name from Articulos table
+    try {
+      const articulosTable = getBranchArticulosTable(row.sucursal);
+      const { data, error } = await supabase
+        .from(articulosTable)
+        .select('nombre_comer_a')
+        .eq('cve_articulo_a', row.articulo)
+        .single();
+
+      if (error) {
+        console.error('Error fetching article name:', error);
+        setArticleName('No disponible');
+      } else if (data) {
+        setArticleName(data.nombre_comer_a || 'Sin nombre');
+      } else {
+        setArticleName('No encontrado');
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      setArticleName('Error al cargar');
+    } finally {
+      setLoadingArticleName(false);
+    }
   };
 
   const handleCloseModal = () => {
@@ -863,7 +905,7 @@ const DataTableVentas = () => {
           onClick={handleCloseModal}
         >
           <div
-            class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"
+            class="modal-dialog modal-md modal-dialog-centered modal-dialog-scrollable"
             onClick={(e) => e.stopPropagation()}
           >
             <div class="modal-content">
@@ -876,97 +918,84 @@ const DataTableVentas = () => {
                   onClick={handleCloseModal}
                 ></button>
               </div>
-              <div class="modal-body">
-                {/* Article Info Section */}
-                <div class="card mb-3">
-                  <div class="card-header bg-light">
-                    <h6 class="mb-0">Información del Artículo</h6>
-                  </div>
-                  <div class="card-body">
-                    <div class="row g-3">
-                      <div class="col-md-6">
-                        <label class="form-label fw-bold small text-muted">Código</label>
-                        <p class="mb-0">{selectedArticle.articulo}</p>
-                      </div>
-                      <div class="col-md-6">
-                        <label class="form-label fw-bold small text-muted">Tipo</label>
-                        <p class="mb-0">{selectedArticle.tipo || 'N/A'}</p>
-                      </div>
-                      <div class="col-12">
-                        <label class="form-label fw-bold small text-muted">Nombre</label>
-                        <p class="mb-0">{selectedArticle.nombre}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Transaction Details Section */}
-                <div class="card mb-3">
-                  <div class="card-header bg-light">
-                    <h6 class="mb-0">Detalles de Transacción</h6>
-                  </div>
-                  <div class="card-body">
-                    <div class="row g-3">
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold small text-muted">Fecha</label>
-                        <p class="mb-0">{selectedArticle.fecha}</p>
-                      </div>
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold small text-muted">Hora</label>
-                        <p class="mb-0">{selectedArticle.hora}</p>
-                      </div>
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold small text-muted">Sucursal</label>
-                        <p class="mb-0">{selectedArticle.sucursal.replace('Kardex', '')}</p>
-                      </div>
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold small text-muted">Turno</label>
-                        <p class="mb-0">{selectedArticle.turno}</p>
-                      </div>
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold small text-muted">Folio</label>
-                        <p class="mb-0">{selectedArticle.fol}</p>
-                      </div>
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold small text-muted">Referencia</label>
-                        <p class="mb-0">{selectedArticle.referencia || 'N/A'}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Pricing Details Section */}
+              <div class="modal-body p-3">
                 <div class="card">
-                  <div class="card-header bg-light">
-                    <h6 class="mb-0">Información de Precios</h6>
-                  </div>
-                  <div class="card-body">
-                    <div class="row g-3">
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold small text-muted">Cantidad</label>
-                        <p class="mb-0 fs-5">{selectedArticle.cantidad}</p>
+                  <div class="card-body p-3">
+                    {/* Article Code and Name */}
+                    <div class="mb-3">
+                      <label class="form-label fw-bold small text-muted mb-1">Código</label>
+                      <p class="mb-2">{selectedArticle.articulo}</p>
+
+                      <label class="form-label fw-bold small text-muted mb-1">Nombre del Producto</label>
+                      {loadingArticleName ? (
+                        <div class="d-flex align-items-center">
+                          <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                          <span class="text-muted small">Cargando...</span>
+                        </div>
+                      ) : (
+                        <p class="mb-0 fs-6 fw-bold text-primary">{articleName}</p>
+                      )}
+                    </div>
+
+                    <hr class="my-2" />
+
+                    {/* Transaction Info */}
+                    <div class="row g-2 mb-2">
+                      <div class="col-6">
+                        <label class="form-label fw-bold small text-muted mb-0">Fecha</label>
+                        <p class="mb-0 small">{selectedArticle.fecha}</p>
                       </div>
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold small text-muted">Precio Unitario</label>
-                        <p class="mb-0 fs-5">
+                      <div class="col-6">
+                        <label class="form-label fw-bold small text-muted mb-0">Hora</label>
+                        <p class="mb-0 small">{selectedArticle.hora}</p>
+                      </div>
+                      <div class="col-6">
+                        <label class="form-label fw-bold small text-muted mb-0">Sucursal</label>
+                        <p class="mb-0 small">{selectedArticle.sucursal.replace('Kardex', '')}</p>
+                      </div>
+                      <div class="col-6">
+                        <label class="form-label fw-bold small text-muted mb-0">Turno</label>
+                        <p class="mb-0 small">{selectedArticle.turno}</p>
+                      </div>
+                      <div class="col-6">
+                        <label class="form-label fw-bold small text-muted mb-0">Folio</label>
+                        <p class="mb-0 small">{selectedArticle.fol}</p>
+                      </div>
+                      <div class="col-6">
+                        <label class="form-label fw-bold small text-muted mb-0">Referencia</label>
+                        <p class="mb-0 small">{selectedArticle.referencia || 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    <hr class="my-2" />
+
+                    {/* Pricing Info */}
+                    <div class="row g-2">
+                      <div class="col-6">
+                        <label class="form-label fw-bold small text-muted mb-0">Cantidad</label>
+                        <p class="mb-0 fw-bold">{selectedArticle.cantidad}</p>
+                      </div>
+                      <div class="col-6">
+                        <label class="form-label fw-bold small text-muted mb-0">Precio Unit.</label>
+                        <p class="mb-0">
                           {selectedArticle.ppub.toLocaleString('es-MX', {
                             style: 'currency',
                             currency: 'MXN'
                           })}
                         </p>
                       </div>
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold small text-muted">Costo Unitario</label>
-                        <p class="mb-0 fs-5">
+                      <div class="col-6">
+                        <label class="form-label fw-bold small text-muted mb-0">Costo Unit.</label>
+                        <p class="mb-0">
                           {selectedArticle.costo.toLocaleString('es-MX', {
                             style: 'currency',
                             currency: 'MXN'
                           })}
                         </p>
                       </div>
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold small text-muted">Descuento</label>
-                        <p class="mb-0 fs-5 text-warning">
+                      <div class="col-6">
+                        <label class="form-label fw-bold small text-muted mb-0">Descuento</label>
+                        <p class="mb-0 text-warning">
                           {selectedArticle.dscto > 0
                             ? selectedArticle.dscto.toLocaleString('es-MX', {
                               style: 'currency',
@@ -975,19 +1004,19 @@ const DataTableVentas = () => {
                             : '-'}
                         </p>
                       </div>
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold small text-muted">Total Venta</label>
-                        <p class="mb-0 fs-5 fw-bold text-primary">
+                      <div class="col-6">
+                        <label class="form-label fw-bold small text-muted mb-0">Total Venta</label>
+                        <p class="mb-0 fw-bold text-primary">
                           {selectedArticle.precioFinal.toLocaleString('es-MX', {
                             style: 'currency',
                             currency: 'MXN'
                           })}
                         </p>
                       </div>
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold small text-muted">Utilidad</label>
+                      <div class="col-6">
+                        <label class="form-label fw-bold small text-muted mb-0">Utilidad</label>
                         <p
-                          class={`mb-0 fs-5 fw-bold ${selectedArticle.utilidad >= 0 ? 'text-success' : 'text-danger'
+                          class={`mb-0 fw-bold ${selectedArticle.utilidad >= 0 ? 'text-success' : 'text-danger'
                             }`}
                         >
                           {selectedArticle.utilidad.toLocaleString('es-MX', {
@@ -1000,10 +1029,10 @@ const DataTableVentas = () => {
                   </div>
                 </div>
               </div>
-              <div class="modal-footer">
+              <div class="modal-footer p-2">
                 <button
                   type="button"
-                  class="btn btn-secondary"
+                  class="btn btn-secondary btn-sm"
                   onClick={handleCloseModal}
                 >
                   Cerrar
