@@ -286,19 +286,30 @@ const DataTableVentas = () => {
           let formattedHora = 'N/A';
           if (item.hora) {
             try {
-              const dateWithTime = item.hora.includes('T')
-                ? new Date(item.hora)
-                : new Date(`1970-01-01T${item.hora}`);
+              // Handle Supabase timestamp format: "1899-12-30 18:53:25" or "2024-01-01T18:53:25"
+              const horaStr = String(item.hora);
+
+              // Try to parse as Date
+              const dateWithTime = new Date(horaStr);
+
               if (!isNaN(dateWithTime.getTime())) {
+                // Successfully parsed - extract time portion
                 formattedHora = dateWithTime.toLocaleTimeString('es-MX', {
                   hour: '2-digit',
                   minute: '2-digit',
                   second: '2-digit',
                   hour12: false
                 });
+              } else {
+                // If Date parsing fails, try to extract time manually
+                // Format: "YYYY-MM-DD HH:MM:SS" or "HH:MM:SS"
+                const timeMatch = horaStr.match(/(\d{2}):(\d{2}):(\d{2})/);
+                if (timeMatch) {
+                  formattedHora = `${timeMatch[1]}:${timeMatch[2]}:${timeMatch[3]}`;
+                }
               }
             } catch (e) {
-              // ignore
+              console.warn('Error parsing time:', item.hora, e);
             }
           }
 
