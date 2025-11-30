@@ -110,7 +110,23 @@ const DataTableVentas = () => {
 
   const [operatingExpenses, setOperatingExpenses] = useState<number>(0);
 
+  // --- Modal State ---
+  const [modalOpen, setModalOpen] = useState<boolean>(false);
+  const [selectedArticle, setSelectedArticle] = useState<TableRow | null>(null);
+
   // --- Effects ---
+
+  // Effect: Lock body scroll when modal is open
+  useEffect(() => {
+    if (modalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [modalOpen]);
 
   // Effect 1: Fetch initial date range
   useEffect(() => {
@@ -423,6 +439,16 @@ const DataTableVentas = () => {
     setSortDirection(isAsc ? 'desc' : 'asc');
   };
 
+  const handleArticleClick = (row: TableRow) => {
+    setSelectedArticle(row);
+    setModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalOpen(false);
+    setSelectedArticle(null);
+  };
+
   const handleExpensesCalculated = useCallback((calculatedExpenses: number) => {
     setOperatingExpenses((prevExpenses) => {
       if (prevExpenses !== calculatedExpenses) {
@@ -729,7 +755,12 @@ const DataTableVentas = () => {
                       <td>{row.fecha}</td>
                       <td>{row.hora}</td>
                       <td>{row.sucursal.replace('Kardex', '')}</td>
-                      <td class="text-truncate" style={{ maxWidth: '150px' }}>
+                      <td
+                        class="text-truncate"
+                        style={{ maxWidth: '150px', cursor: 'pointer', color: '#0d6efd' }}
+                        onClick={() => handleArticleClick(row)}
+                        title="Click para ver detalles"
+                      >
                         {row.articulo}
                       </td>
                       <td class="text-truncate" style={{ maxWidth: '200px' }}>
@@ -822,6 +853,166 @@ const DataTableVentas = () => {
           </nav>
         </div>
       </div>
+
+      {/* Article Details Modal */}
+      {modalOpen && selectedArticle && (
+        <div
+          class="modal fade show d-block"
+          tabIndex={-1}
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+          onClick={handleCloseModal}
+        >
+          <div
+            class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div class="modal-content">
+              <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Detalles del Artículo</h5>
+                <button
+                  type="button"
+                  class="btn-close btn-close-white"
+                  aria-label="Close"
+                  onClick={handleCloseModal}
+                ></button>
+              </div>
+              <div class="modal-body">
+                {/* Article Info Section */}
+                <div class="card mb-3">
+                  <div class="card-header bg-light">
+                    <h6 class="mb-0">Información del Artículo</h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="row g-3">
+                      <div class="col-md-6">
+                        <label class="form-label fw-bold small text-muted">Código</label>
+                        <p class="mb-0">{selectedArticle.articulo}</p>
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label fw-bold small text-muted">Tipo</label>
+                        <p class="mb-0">{selectedArticle.tipo || 'N/A'}</p>
+                      </div>
+                      <div class="col-12">
+                        <label class="form-label fw-bold small text-muted">Nombre</label>
+                        <p class="mb-0">{selectedArticle.nombre}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Transaction Details Section */}
+                <div class="card mb-3">
+                  <div class="card-header bg-light">
+                    <h6 class="mb-0">Detalles de Transacción</h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="row g-3">
+                      <div class="col-md-4">
+                        <label class="form-label fw-bold small text-muted">Fecha</label>
+                        <p class="mb-0">{selectedArticle.fecha}</p>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label fw-bold small text-muted">Hora</label>
+                        <p class="mb-0">{selectedArticle.hora}</p>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label fw-bold small text-muted">Sucursal</label>
+                        <p class="mb-0">{selectedArticle.sucursal.replace('Kardex', '')}</p>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label fw-bold small text-muted">Turno</label>
+                        <p class="mb-0">{selectedArticle.turno}</p>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label fw-bold small text-muted">Folio</label>
+                        <p class="mb-0">{selectedArticle.fol}</p>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label fw-bold small text-muted">Referencia</label>
+                        <p class="mb-0">{selectedArticle.referencia || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pricing Details Section */}
+                <div class="card">
+                  <div class="card-header bg-light">
+                    <h6 class="mb-0">Información de Precios</h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="row g-3">
+                      <div class="col-md-4">
+                        <label class="form-label fw-bold small text-muted">Cantidad</label>
+                        <p class="mb-0 fs-5">{selectedArticle.cantidad}</p>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label fw-bold small text-muted">Precio Unitario</label>
+                        <p class="mb-0 fs-5">
+                          {selectedArticle.ppub.toLocaleString('es-MX', {
+                            style: 'currency',
+                            currency: 'MXN'
+                          })}
+                        </p>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label fw-bold small text-muted">Costo Unitario</label>
+                        <p class="mb-0 fs-5">
+                          {selectedArticle.costo.toLocaleString('es-MX', {
+                            style: 'currency',
+                            currency: 'MXN'
+                          })}
+                        </p>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label fw-bold small text-muted">Descuento</label>
+                        <p class="mb-0 fs-5 text-warning">
+                          {selectedArticle.dscto > 0
+                            ? selectedArticle.dscto.toLocaleString('es-MX', {
+                              style: 'currency',
+                              currency: 'MXN'
+                            })
+                            : '-'}
+                        </p>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label fw-bold small text-muted">Total Venta</label>
+                        <p class="mb-0 fs-5 fw-bold text-primary">
+                          {selectedArticle.precioFinal.toLocaleString('es-MX', {
+                            style: 'currency',
+                            currency: 'MXN'
+                          })}
+                        </p>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label fw-bold small text-muted">Utilidad</label>
+                        <p
+                          class={`mb-0 fs-5 fw-bold ${selectedArticle.utilidad >= 0 ? 'text-success' : 'text-danger'
+                            }`}
+                        >
+                          {selectedArticle.utilidad.toLocaleString('es-MX', {
+                            style: 'currency',
+                            currency: 'MXN'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  onClick={handleCloseModal}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
