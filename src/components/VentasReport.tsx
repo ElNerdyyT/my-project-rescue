@@ -86,13 +86,13 @@ const SERVER_SIDE_COLUMNS: (keyof TableRow)[] = [
   'referencia',
   'tipo',
   'sucursal',
-  'costo'
-];
-const CLIENT_SIDE_COLUMNS: (keyof TableRow)[] = [
+  'costo',
+  // Now in database view:
   'utilidad',
   'precioFinal',
   'costoTotal'
 ];
+const CLIENT_SIDE_COLUMNS: (keyof TableRow)[] = []; // All sorting is now server-side
 
 const DataTableVentas = () => {
   // --- State ---
@@ -300,17 +300,27 @@ const DataTableVentas = () => {
 
         if (count !== null) setTotalCount(count);
 
-        // Process Data
+        // Process Data - now using calculated columns from DB
         const processedData: TableRow[] = (resultData || []).map((item: any) => {
+          // For vista_ventas_general, calculated columns come from DB
+          // For individual branches, we still need to calculate
           const cantidad = safeParseFloatAndRound(item.cantidad);
           const costo = safeParseFloatAndRound(item.costo);
           const ppub = safeParseFloatAndRound(item.ppub);
           const dscto = safeParseFloatAndRound(item.dscto);
-          const costoTotal = safeParseFloatAndRound(cantidad * costo);
-          const precioFinal = safeParseFloatAndRound(cantidad * ppub);
-          const utilidad = safeParseFloatAndRound(
-            precioFinal - costoTotal - dscto
-          );
+
+          // Use DB values if available (vista), otherwise calculate
+          const costoTotal = item.costoTotal !== undefined
+            ? safeParseFloatAndRound(item.costoTotal)
+            : safeParseFloatAndRound(cantidad * costo);
+
+          const precioFinal = item.precioFinal !== undefined
+            ? safeParseFloatAndRound(item.precioFinal)
+            : safeParseFloatAndRound(cantidad * ppub - dscto);
+
+          const utilidad = item.utilidad !== undefined
+            ? safeParseFloatAndRound(item.utilidad)
+            : safeParseFloatAndRound(precioFinal - costoTotal);
 
           let formattedHora = 'N/A';
           if (item.hora) {
@@ -366,21 +376,7 @@ const DataTableVentas = () => {
           };
         });
 
-        // Apply client-side sorting if needed
-        let finalData = processedData;
-        if (CLIENT_SIDE_COLUMNS.includes(sortColumn)) {
-          finalData = [...processedData].sort((a, b) => {
-            const aValue = a[sortColumn] as number;
-            const bValue = b[sortColumn] as number;
-            if (sortDirection === 'asc') {
-              return aValue - bValue;
-            } else {
-              return bValue - aValue;
-            }
-          });
-        }
-
-        setData(finalData);
+        setData(processedData);
       } catch (err: any) {
         console.error('Error fetching data:', err);
         setError(
