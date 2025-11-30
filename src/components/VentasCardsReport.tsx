@@ -19,7 +19,7 @@ interface BranchSummary {
 }
 
 // Interface for the structure returned by the RPC function
-// Names must match the 'RETURNS TABLE' definition in the SQL function (get_general_ventas_summary_union)
+// Names must match the 'RETURNS TABLE' definition in the SQL function (get_ventas_stats_v2)
 interface GeneralSummary {
   total_cantidad: number;
   total_costo: number;
@@ -208,11 +208,10 @@ const VentasCardsReport = ({
         utilidadBruta: 0,
         isLoading: true,
         error: null,
-        loadingMessage: `Cargando ${
-          selectedBranch === 'General'
+        loadingMessage: `Cargando ${selectedBranch === 'General'
             ? 'resumen general'
             : selectedBranch.replace('Kardex', '')
-        }...`
+          }...`
       });
 
       let grandTotalProductos = 0;
@@ -227,22 +226,22 @@ const VentasCardsReport = ({
         if (selectedBranch === 'General') {
           if (selectedTurno === 'Todos') {
             // ✅ Caso General SIN filtro de turno:
-            // usamos el RPC para que sea más rápido
+            // Usamos el NUEVO RPC optimizado
             console.log(
-              `VentasCardsReport: Calling DB function get_general_ventas_summary_union (Dates: ${formattedStartDate} - ${formattedEndDate})`
+              `VentasCardsReport: Calling DB function get_ventas_stats_v2 (Dates: ${formattedStartDate} - ${formattedEndDate})`
             );
 
             const { data: rpcResult, error: rpcError } =
               await supabase
-                .rpc('get_general_ventas_summary_union', {
-                  start_date_param: formattedStartDate,
-                  end_date_param: formattedEndDate
+                .rpc('get_ventas_stats_v2', {
+                  start_date: formattedStartDate,
+                  end_date: formattedEndDate
                 })
-                .returns<GeneralSummary[]>();
+                .single(); // Use .single() as the new RPC returns one row
 
             if (rpcError) {
               console.error(
-                "Error calling RPC function 'get_general_ventas_summary_union':",
+                "Error calling RPC function 'get_ventas_stats_v2':",
                 rpcError
               );
               const errorDetail = rpcError.code
@@ -253,24 +252,11 @@ const VentasCardsReport = ({
               );
             }
 
-            if (!rpcResult || rpcResult.length === 0) {
-              console.warn(
-                "RPC function 'get_general_ventas_summary_union' returned no summary data."
-              );
-              grandTotalProductos = 0;
-              grandTotalCosto = 0;
-              grandTotalPpub = 0;
-              grandTotalDscto = 0;
-            } else {
-              const generalSummary = rpcResult[0];
-              grandTotalProductos =
-                generalSummary.total_cantidad ?? 0;
-              grandTotalCosto =
-                generalSummary.total_costo ?? 0;
-              grandTotalPpub =
-                generalSummary.total_ppub ?? 0;
-              grandTotalDscto =
-                generalSummary.total_dscto ?? 0;
+            if (rpcResult) {
+              grandTotalProductos = Number(rpcResult.total_cantidad) || 0;
+              grandTotalCosto = Number(rpcResult.total_costo) || 0;
+              grandTotalPpub = Number(rpcResult.total_ppub) || 0;
+              grandTotalDscto = Number(rpcResult.total_dscto) || 0;
             }
           } else {
             // ✅ Caso General CON filtro de turno:
@@ -352,11 +338,10 @@ const VentasCardsReport = ({
           totalDescuentoGeneral: 0,
           utilidadBruta: 0,
           isLoading: false,
-          error: `Error al obtener datos para ${
-            selectedBranch === 'General'
+          error: `Error al obtener datos para ${selectedBranch === 'General'
               ? 'General'
               : selectedBranch.replace('Kardex', '')
-          }: ${error.message || 'Error desconocido'}`,
+            }: ${error.message || 'Error desconocido'}`,
           loadingMessage: undefined
         }));
       }
@@ -533,11 +518,10 @@ const VentasCardsReport = ({
           {/* Utilidad Neta */}
           <div className="col">
             <div
-              className={`card h-100 ${
-                utilidadNeta >= 0
+              className={`card h-100 ${utilidadNeta >= 0
                   ? 'bg-success-lt'
                   : 'bg-danger-lt'
-              }`}
+                }`}
             >
               <div className="card-body text-center">
                 <div className="subheader fw-bold">
