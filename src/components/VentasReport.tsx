@@ -72,6 +72,28 @@ const years = Array.from(
   (_, i) => String(2015 + i)
 ).reverse();
 
+// Constants for sorting optimization
+const SERVER_SIDE_COLUMNS: (keyof TableRow)[] = [
+  'fecha',
+  'hora',
+  'articulo',
+  'nombre',
+  'cantidad',
+  'ppub',
+  'dscto',
+  'turno',
+  'fol',
+  'referencia',
+  'tipo',
+  'sucursal',
+  'costo'
+];
+const CLIENT_SIDE_COLUMNS: (keyof TableRow)[] = [
+  'utilidad',
+  'precioFinal',
+  'costoTotal'
+];
+
 const DataTableVentas = () => {
   // --- State ---
   const [data, setData] = useState<TableRow[]>([]); // Data for current page
@@ -257,8 +279,15 @@ const DataTableVentas = () => {
           );
         }
 
-        // Sorting
-        query = query.order(sortColumn, { ascending: sortDirection === 'asc' });
+        // Sorting: Only apply server-side sorting for columns that exist in DB
+        const isServerSideSort = SERVER_SIDE_COLUMNS.includes(sortColumn);
+        if (isServerSideSort) {
+          query = query.order(sortColumn, { ascending: sortDirection === 'asc' });
+        } else {
+          // For client-side columns, we'll sort after fetching
+          // Use a default server-side sort to ensure consistent ordering
+          query = query.order('fecha', { ascending: false });
+        }
 
         // Pagination
         const from = (currentPage - 1) * itemsPerPage;
@@ -337,7 +366,21 @@ const DataTableVentas = () => {
           };
         });
 
-        setData(processedData);
+        // Apply client-side sorting if needed
+        let finalData = processedData;
+        if (CLIENT_SIDE_COLUMNS.includes(sortColumn)) {
+          finalData = [...processedData].sort((a, b) => {
+            const aValue = a[sortColumn] as number;
+            const bValue = b[sortColumn] as number;
+            if (sortDirection === 'asc') {
+              return aValue - bValue;
+            } else {
+              return bValue - aValue;
+            }
+          });
+        }
+
+        setData(finalData);
       } catch (err: any) {
         console.error('Error fetching data:', err);
         setError(
