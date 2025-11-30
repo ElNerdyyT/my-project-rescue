@@ -260,28 +260,32 @@ const VentasCardsReport = ({
             }
           } else {
             // ✅ Caso General CON filtro de turno:
-            // sumamos manualmente las sucursales porque el RPC no filtra turno
-            let sumCantidad = 0;
-            let sumCosto = 0;
-            let sumPpub = 0;
-            let sumDscto = 0;
+            // Ejecutamos las queries en paralelo para todas las sucursales
+            console.log(
+              `VentasCardsReport: Fetching summaries for all branches in parallel (Turno: ${selectedTurno})`
+            );
 
-            for (const br of ALL_BRANCHES) {
-              const summary = await fetchBranchSummary(
-                br,
-                formattedStartDate,
-                formattedEndDate
-              );
-              sumCantidad += summary.totalCantidad;
-              sumCosto += summary.totalCosto;
-              sumPpub += summary.totalPpub;
-              sumDscto += summary.totalDscto;
-            }
+            const branchPromises = ALL_BRANCHES.map(br =>
+              fetchBranchSummary(br, formattedStartDate, formattedEndDate)
+            );
 
-            grandTotalProductos = sumCantidad;
-            grandTotalCosto = sumCosto;
-            grandTotalPpub = sumPpub;
-            grandTotalDscto = sumDscto;
+            const branchSummaries = await Promise.all(branchPromises);
+
+            // Sumar los resultados
+            const totals = branchSummaries.reduce(
+              (acc, summary) => ({
+                sumCantidad: acc.sumCantidad + summary.totalCantidad,
+                sumCosto: acc.sumCosto + summary.totalCosto,
+                sumPpub: acc.sumPpub + summary.totalPpub,
+                sumDscto: acc.sumDscto + summary.totalDscto
+              }),
+              { sumCantidad: 0, sumCosto: 0, sumPpub: 0, sumDscto: 0 }
+            );
+
+            grandTotalProductos = totals.sumCantidad;
+            grandTotalCosto = totals.sumCosto;
+            grandTotalPpub = totals.sumPpub;
+            grandTotalDscto = totals.sumDscto;
           }
         } else {
           // Sucursal individual siempre usa fetchBranchSummary (ya respeta turno)
