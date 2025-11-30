@@ -209,8 +209,8 @@ const VentasCardsReport = ({
         isLoading: true,
         error: null,
         loadingMessage: `Cargando ${selectedBranch === 'General'
-            ? 'resumen general'
-            : selectedBranch.replace('Kardex', '')
+          ? 'resumen general'
+          : selectedBranch.replace('Kardex', '')
           }...`
       });
 
@@ -339,8 +339,8 @@ const VentasCardsReport = ({
           utilidadBruta: 0,
           isLoading: false,
           error: `Error al obtener datos para ${selectedBranch === 'General'
-              ? 'General'
-              : selectedBranch.replace('Kardex', '')
+            ? 'General'
+            : selectedBranch.replace('Kardex', '')
             }: ${error.message || 'Error desconocido'}`,
           loadingMessage: undefined
         }));
@@ -519,8 +519,8 @@ const VentasCardsReport = ({
           <div className="col">
             <div
               className={`card h-100 ${utilidadNeta >= 0
-                  ? 'bg-success-lt'
-                  : 'bg-danger-lt'
+                ? 'bg-success-lt'
+                : 'bg-danger-lt'
                 }`}
             >
               <div className="card-body text-center">
